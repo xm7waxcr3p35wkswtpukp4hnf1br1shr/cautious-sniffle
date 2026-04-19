@@ -303,21 +303,6 @@ export default function HomePage() {
     <div style={{ minHeight: "100vh", background: "var(--bg-primary)", color: "var(--text-primary)" }}>
 
       {/* header */}
-      <header style={{ borderBottom: "0.5px solid var(--border-color)", padding: "0 24px", height: "46px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, background: "rgba(10,10,11,0.92)", backdropFilter: "blur(6px)", zIndex: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
-          <TonLogo />
-          <span style={{ fontSize: "13px", fontWeight: 500, letterSpacing: "0.01em" }}>Fragment Username</span>
-        </div>
-        <a
-          href="https://fragment.com" target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: "12px", color: "var(--text-muted)", textDecoration: "none", display: "flex", alignItems: "center", gap: "3px", transition: "color 0.1s" }}
-          onMouseEnter={e => (e.currentTarget.style.color = "var(--text-primary)")}
-          onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
-        >
-          fragment.com
-          <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-        </a>
-      </header>
 
       <main style={{ maxWidth: "620px", margin: "0 auto", padding: "40px 24px 80px" }}>
 

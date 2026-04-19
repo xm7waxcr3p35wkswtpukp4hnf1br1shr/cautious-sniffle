@@ -26,3 +26,13 @@ export async function GET() {
     return NextResponse.json({ history: [] });
   }
 }
+
+export async function DELETE() {
+  try {
+    await db.delete(usernameChecks);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("History clear error:", err);
+    return NextResponse.json({ ok: false }, { status: 500 });
+  }
+}

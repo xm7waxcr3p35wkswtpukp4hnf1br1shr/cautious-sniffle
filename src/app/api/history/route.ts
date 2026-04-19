@@ -13,7 +13,6 @@ export async function GET() {
       .orderBy(desc(usernameChecks.checkedAt))
       .limit(50);
 
-    // Serialize dates to ISO strings so JSON.stringify works correctly
     const serialized = rows.map((row) => ({
       ...row,
       checkedAt: row.checkedAt instanceof Date

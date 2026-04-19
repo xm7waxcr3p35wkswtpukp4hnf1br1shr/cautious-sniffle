@@ -53,12 +53,6 @@ function TonLogo() {
   );
 }
 
-function FragmentLogo() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#3dabf5" /><path d="M8 10h10v3H11v2.5h6v3h-6V23H8V10z" fill="white" /><path d="M20 10h4v13h-4V10z" fill="white" opacity="0.6" /></svg>
-  );
-}
-
 function Spinner({ size = 18 }: { size?: number }) {
   return (
     <svg className="animate-spin" width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -199,7 +193,7 @@ export default function HomePage() {
   const [batchInput, setBatchInput] = useState("");
   const [sweepInput, setSweepInput] = useState("");
   const [sweepPosition, setSweepPosition] = useState<"suffix" | "prefix">("suffix");
-  const [mode, setMode] = useState<"single" | "batch" | "sweep">("single");
+  const [mode, setMode] = useState<"single" | "batch" | "sweep" | "history">("single");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
   const [batchResults, setBatchResults] = useState<CheckResult[]>([]);
@@ -209,7 +203,6 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -304,64 +297,22 @@ export default function HomePage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-primary)", color: "var(--text-primary)" }}>
-
-      {/* ── Header ── */}
-      <header style={{ borderBottom: "1px solid var(--border-color)", background: "rgba(21,30,39,0.95)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 24px", height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <FragmentLogo />
-            <span style={{ fontSize: "17px", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.01em" }}>Fragment</span>
-            <span style={{ fontSize: "13px", color: "var(--text-muted)", paddingLeft: "8px", borderLeft: "1px solid var(--border-color)", marginLeft: "4px" }}>Username Checker</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <a href="https://fragment.com" target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: "13px", color: "var(--text-secondary)", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px" }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--accent-blue)")}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--text-secondary)")}
-            >
-              fragment.com
-              <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-            </a>
-            <button onClick={() => { setShowHistory(!showHistory); if (!showHistory) void fetchHistory(); }}
-              style={{ background: showHistory ? "rgba(61,171,245,0.12)" : "transparent", border: `1px solid ${showHistory ? "rgba(61,171,245,0.3)" : "var(--border-color)"}`, borderRadius: "7px", padding: "5px 12px", color: showHistory ? "var(--accent-blue)" : "var(--text-secondary)", fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 8v4l3 3M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-              History
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* ── Hero ── */}
-      <section style={{ padding: "72px 24px 48px", textAlign: "center", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: "-100px", left: "50%", transform: "translateX(-50%)", width: "600px", height: "400px", background: "radial-gradient(ellipse at center, rgba(0,152,234,0.08) 0%, transparent 70%)", pointerEvents: "none" }} />
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(61,171,245,0.08)", border: "1px solid rgba(61,171,245,0.2)", borderRadius: "20px", padding: "4px 12px", fontSize: "12px", color: "var(--accent-blue)", marginBottom: "24px", fontWeight: 500 }}>
-            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#2ec45e", display: "inline-block", boxShadow: "0 0 6px #2ec45e" }} />
-            Powered by Fragment API
-          </div>
-          <h1 style={{ fontSize: "clamp(28px, 5vw, 46px)", fontWeight: 800, letterSpacing: "-0.03em", color: "var(--text-primary)", margin: "0 0 14px", lineHeight: 1.15 }}>
-            Check Telegram Username <span style={{ color: "var(--accent-blue)" }}>Availability</span>
-          </h1>
-          <p style={{ fontSize: "16px", color: "var(--text-secondary)", margin: "0 auto", maxWidth: "480px", lineHeight: 1.6 }}>
-            Instantly check if a Telegram username is available, taken, for sale, or sold on the{" "}
-            <a href="https://fragment.com" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-blue)", textDecoration: "none" }}>Fragment</a> marketplace.
-          </p>
-        </div>
-      </section>
-
-      {/* ── Main ── */}
-      <main style={{ maxWidth: "720px", margin: "0 auto", padding: "0 24px 80px" }}>
+      <main style={{ maxWidth: "720px", margin: "0 auto", padding: "48px 24px 80px" }}>
 
         {/* Mode Toggle */}
         <div style={{ display: "flex", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", borderRadius: "10px", padding: "4px", marginBottom: "24px" }}>
           {([
-            { key: "single", label: "Single Check" },
-            { key: "batch", label: "Batch (up to 200)" },
-            { key: "sweep", label: "⚡ Alpha Sweep" },
+            { key: "single", label: "Single" },
+            { key: "batch", label: "Batch" },
+            { key: "sweep", label: "⚡ Sweep" },
+            { key: "history", label: "🕐 History" },
           ] as const).map(({ key, label }) => (
             <button key={key}
-              onClick={() => { setMode(key); setResult(null); setBatchResults([]); setSweepResults([]); setError(null); }}
+              onClick={() => {
+                setMode(key);
+                setResult(null); setBatchResults([]); setSweepResults([]); setError(null);
+                if (key === "history") void fetchHistory();
+              }}
               style={{ flex: 1, padding: "8px", borderRadius: "7px", border: "none", background: mode === key ? "rgba(61,171,245,0.15)" : "transparent", color: mode === key ? "var(--accent-blue)" : "var(--text-secondary)", fontWeight: mode === key ? 600 : 400, fontSize: "13px", cursor: "pointer", transition: "all 0.15s", outline: mode === key ? "1px solid rgba(61,171,245,0.3)" : "none" }}
             >{label}</button>
           ))}
@@ -538,9 +489,9 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* ── History Panel ── */}
-        {showHistory && (
-          <div className="animate-fade-in" style={{ marginTop: "40px" }}>
+        {/* ── History Mode ── */}
+        {mode === "history" && (
+          <div className="animate-fade-in">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
               <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="var(--text-secondary)" strokeWidth="2" /><path d="M12 6v6l4 2" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" /></svg>

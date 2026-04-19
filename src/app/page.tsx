@@ -184,11 +184,19 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
   const [batchResults, setBatchResults] = useState<CheckResult[]>([]);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc" | "none">("none");
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const sortedResults = [...batchResults].sort((a, b) => {
+    if (sortOrder === "none") return 0;
+    return sortOrder === "asc"
+      ? a.username.localeCompare(b.username)
+      : b.username.localeCompare(a.username);
+  });
 
   const fetchHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -245,6 +253,7 @@ export default function HomePage() {
     setLoading(true);
     setError(null);
     setBatchResults([]);
+    setSortOrder("none");
 
     try {
       const res = await fetch("/api/check-username", {
@@ -1050,6 +1059,30 @@ export default function HomePage() {
                   })}
                 </div>
 
+                {/* Sort controls */}
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px", gap: "6px", alignItems: "center" }}>
+                  <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Sort:</span>
+                  {(["none", "asc", "desc"] as const).map((order) => (
+                    <button
+                      key={order}
+                      onClick={() => setSortOrder(order)}
+                      style={{
+                        background: sortOrder === order ? "rgba(61,171,245,0.15)" : "transparent",
+                        border: `1px solid ${sortOrder === order ? "rgba(61,171,245,0.3)" : "var(--border-color)"}`,
+                        borderRadius: "6px",
+                        padding: "4px 10px",
+                        color: sortOrder === order ? "var(--accent-blue)" : "var(--text-secondary)",
+                        fontSize: "12px",
+                        fontWeight: sortOrder === order ? 600 : 400,
+                        cursor: "pointer",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {order === "none" ? "Default" : order === "asc" ? "A → Z" : "Z → A"}
+                    </button>
+                  ))}
+                </div>
+
                 {/* Results Table */}
                 <div
                   style={{
@@ -1059,7 +1092,7 @@ export default function HomePage() {
                     overflow: "hidden",
                   }}
                 >
-                  {batchResults.map((r, i) => (
+                  {sortedResults.map((r, i) => (
                     <div
                       key={i}
                       style={{
@@ -1067,7 +1100,7 @@ export default function HomePage() {
                         alignItems: "center",
                         padding: "12px 16px",
                         borderBottom:
-                          i < batchResults.length - 1
+                          i < sortedResults.length - 1
                             ? "1px solid var(--border-color)"
                             : "none",
                         gap: "12px",

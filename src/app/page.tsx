@@ -288,7 +288,7 @@ export default function HomePage() {
   const checkBatch = useCallback(async () => {
     const lines = batchInput.split(/[\n,;]+/).map((s) => s.trim().replace(/^@/, "")).filter(Boolean);
     if (lines.length === 0) return;
-    if (lines.length > 100) { setError("Max 100 usernames per batch."); return; }
+    if (lines.length > 333) { setError("Max 333 usernames per batch."); return; }
     setLoading(true); setError(null); setBatchResults([]); setSortMode("none");
     try {
       const res = await fetch("/api/check-username", {
@@ -433,7 +433,7 @@ export default function HomePage() {
               onClick={() => { setMode(m); setResult(null); setBatchResults([]); setSweepResults([]); setError(null); }}
               style={{ flex: 1, padding: "8px", borderRadius: "7px", border: "none", background: mode === m ? "rgba(61,171,245,0.15)" : "transparent", color: mode === m ? "var(--accent-blue)" : "var(--text-secondary)", fontWeight: mode === m ? 600 : 400, fontSize: "13px", cursor: "pointer", transition: "all 0.15s", outline: mode === m ? "1px solid rgba(61,171,245,0.3)" : "none", whiteSpace: "nowrap" }}
             >
-              {m === "single" ? "Single Check" : m === "batch" ? "Batch (up to 100)" : "🔤 Alpha Sweep"}
+              {m === "single" ? "Single Check" : m === "batch" ? "Batch (up to 333)" : "🔤 Alpha Sweep"}
             </button>
           ))}
         </div>
@@ -518,7 +518,7 @@ export default function HomePage() {
               <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 500 }}>Enter usernames (one per line, comma or semicolon separated)</span>
                 <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  {batchInput.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).length} / 100
+                  {batchInput.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).length} / 333
                 </span>
               </div>
               <textarea value={batchInput}

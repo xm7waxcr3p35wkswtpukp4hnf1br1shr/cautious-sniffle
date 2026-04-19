@@ -23,21 +23,25 @@ type HistoryItem = {
 };
 
 const STATUS_CFG: Record<string, { label: string; color: string }> = {
-  Available:  { label: "Available", color: "#3a9a28" },
-  Taken:      { label: "Taken",     color: "#ec3425" },
-  "For Sale": { label: "For Sale",  color: "#ff9000" },
-  Sold:       { label: "Sold",      color: "#9b9b9b" },
-  Invalid:    { label: "Invalid",   color: "#ec3425" },
-  Unknown:    { label: "Unknown",   color: "#9b9b9b" },
+  Available:  { label: "Available", color: "var(--accent-green)" },
+  Taken:      { label: "Taken",     color: "var(--accent-red)"   },
+  "For Sale": { label: "For Sale",  color: "var(--accent-yellow)"},
+  Sold:       { label: "Sold",      color: "var(--text-muted)"   },
+  Invalid:    { label: "Invalid",   color: "var(--accent-red)"   },
+  Unknown:    { label: "Unknown",   color: "var(--text-muted)"   },
 };
-const getS = (s: string) => STATUS_CFG[s] ?? { label: s, color: "#9b9b9b" };
+const getS = (s: string) => STATUS_CFG[s] ?? { label: s, color: "var(--text-muted)" };
 const STATUS_ORDER = ["Available", "For Sale", "Sold", "Taken", "Unknown", "Invalid"];
 const ALPHA = "abcdefghijklmnopqrstuvwxyz".split("");
 
 /* ── helpers ── */
 function Badge({ status }: { status: string }) {
   const c = getS(status);
-  return <span style={{ color: c.color, fontSize: "11px", fontWeight: 500, letterSpacing: "0.02em", whiteSpace: "nowrap" }}>{c.label}</span>;
+  return (
+    <span style={{ color: c.color, fontSize: "11px", fontWeight: 500, letterSpacing: "0.02em", whiteSpace: "nowrap" }}>
+      {c.label}
+    </span>
+  );
 }
 
 function TonLogo() {
@@ -52,8 +56,8 @@ function TonLogo() {
 function Spin({ sz = 13 }: { sz?: number }) {
   return (
     <svg className="animate-spin" width={sz} height={sz} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="10" stroke="#e6e6e6" strokeWidth="2.5" />
-      <path d="M12 2a10 10 0 0 1 10 10" stroke="#0d0d0d" strokeWidth="2.5" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="10" stroke="var(--border-hover)" strokeWidth="2.5" />
+      <path d="M12 2a10 10 0 0 1 10 10" stroke="var(--text-primary)" strokeWidth="2.5" strokeLinecap="round" />
     </svg>
   );
 }
@@ -69,34 +73,37 @@ function Star() {
 function Ava({ username, photo, sz = 26 }: { username: string; photo?: string | null; sz?: number }) {
   if (photo) return <img src={photo} alt={username} style={{ width: sz, height: sz, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
   return (
-    <div style={{ width: sz, height: sz, borderRadius: "50%", background: "#f4f4f4", border: "0.5px solid #e6e6e6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(sz * 0.38) + "px", fontWeight: 500, color: "#9b9b9b", flexShrink: 0 }}>
+    <div style={{ width: sz, height: sz, borderRadius: "50%", background: "var(--bg-secondary)", border: "0.5px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(sz * 0.38) + "px", fontWeight: 500, color: "var(--text-muted)", flexShrink: 0 }}>
       {username[0]?.toUpperCase() ?? "?"}
     </div>
   );
 }
 
-const DLBDR = { borderBottom: "0.5px solid #e6e6e6" } as const;
+const DLBDR = { borderBottom: "0.5px solid var(--border-color)" } as const;
 
 function Row({ r, last }: { r: CheckResult; last: boolean }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", padding: "9px 14px", ...(!last ? DLBDR : {}), gap: "10px", transition: "background 0.1s", cursor: "default" }}
-      onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.background = "#f4f4f4")}
+    <div
+      style={{ display: "flex", alignItems: "center", padding: "9px 14px", ...(!last ? DLBDR : {}), gap: "10px", transition: "background 0.1s", cursor: "default" }}
+      onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.background = "var(--bg-secondary)")}
       onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
     >
       <Ava username={r.username} photo={r.photo} sz={24} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <span style={{ fontSize: "13px", fontWeight: 500, color: "#0d0d0d" }}>@{r.username}</span>
+          <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>@{r.username}</span>
           {r.hasPremium && <Star />}
         </div>
-        {r.name && <div style={{ fontSize: "11px", color: "#9b9b9b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</div>}
+        {r.name && <div style={{ fontSize: "11px", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</div>}
       </div>
       <Badge status={r.status} />
       {r.status !== "Invalid" && (
-        <a href={`https://fragment.com/username/${r.username}`} target="_blank" rel="noopener noreferrer"
-          style={{ color: "#cecece", textDecoration: "none", display: "flex", alignItems: "center", flexShrink: 0, transition: "color 0.1s" }}
-          onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = "#0d0d0d")}
-          onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = "#cecece")}
+        <a
+          href={`https://fragment.com/username/${r.username}`}
+          target="_blank" rel="noopener noreferrer"
+          style={{ color: "var(--border-hover)", textDecoration: "none", display: "flex", alignItems: "center", flexShrink: 0, transition: "color 0.1s" }}
+          onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--text-primary)")}
+          onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--border-hover)")}
         >
           <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
         </a>
@@ -108,7 +115,8 @@ function Row({ r, last }: { r: CheckResult; last: boolean }) {
 type Sort = "none" | "az" | "za" | "group";
 
 function Results({ results, sort, setSort }: { results: CheckResult[]; sort: Sort; setSort: (s: Sort) => void }) {
-  const sorted = sort === "az" ? [...results].sort((a, b) => a.username.localeCompare(b.username))
+  const sorted =
+    sort === "az" ? [...results].sort((a, b) => a.username.localeCompare(b.username))
     : sort === "za" ? [...results].sort((a, b) => b.username.localeCompare(a.username))
     : results;
 
@@ -132,25 +140,27 @@ function Results({ results, sort, setSort }: { results: CheckResult[]; sort: Sor
       {counts.length > 0 && (
         <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginBottom: "12px" }}>
           {counts.map(({ s, n }) => (
-            <div key={s} style={{ padding: "4px 10px", background: "#f4f4f4", border: "0.5px solid #e6e6e6", borderRadius: "2px", display: "flex", gap: "8px", alignItems: "center" }}>
+            <div key={s} style={{ padding: "4px 10px", background: "var(--bg-secondary)", border: "0.5px solid var(--border-color)", borderRadius: "2px", display: "flex", gap: "8px", alignItems: "center" }}>
               <span style={{ fontSize: "11px", color: getS(s).color, fontWeight: 500 }}>{getS(s).label}</span>
-              <span style={{ fontSize: "12px", fontWeight: 500, color: "#0d0d0d" }}>{n}</span>
+              <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-primary)" }}>{n}</span>
             </div>
           ))}
         </div>
       )}
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: "3px", marginBottom: "8px", alignItems: "center" }}>
-        <span style={{ fontSize: "11px", color: "#9b9b9b", marginRight: "4px" }}>Sort</span>
+        <span style={{ fontSize: "11px", color: "var(--text-muted)", marginRight: "4px" }}>Sort</span>
         {(["none", "az", "za", "group"] as Sort[]).map(k => (
           <button key={k} onClick={() => setSort(k)} style={{
             background: "transparent",
-            border: "0.5px solid " + (sort === k ? "#0d0d0d" : "#cecece"),
+            border: "0.5px solid " + (sort === k ? "var(--text-primary)" : "var(--border-hover)"),
             borderRadius: "2px", padding: "3px 8px",
-            color: sort === k ? "#0d0d0d" : "#9b9b9b",
+            color: sort === k ? "var(--text-primary)" : "var(--text-muted)",
             fontSize: "11px", fontWeight: sort === k ? 500 : 400,
             cursor: "pointer", fontFamily: "inherit", transition: "all 0.1s",
-          }}>{({ none: "Default", az: "A→Z", za: "Z→A", group: "Status" } as Record<Sort, string>)[k]}</button>
+          }}>
+            {({ none: "Default", az: "A→Z", za: "Z→A", group: "Status" } as Record<Sort, string>)[k]}
+          </button>
         ))}
       </div>
 
@@ -160,17 +170,17 @@ function Results({ results, sort, setSort }: { results: CheckResult[]; sort: Sor
             <div key={g.status}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                 <span style={{ fontSize: "10px", fontWeight: 500, color: getS(g.status).color, textTransform: "uppercase", letterSpacing: "0.08em" }}>{getS(g.status).label}</span>
-                <span style={{ fontSize: "10px", color: "#9b9b9b" }}>{g.items.length}</span>
-                <div style={{ flex: 1, height: "0.5px", background: "#e6e6e6" }} />
+                <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>{g.items.length}</span>
+                <div style={{ flex: 1, height: "0.5px", background: "var(--border-color)" }} />
               </div>
-              <div style={{ border: "0.5px solid #e6e6e6", borderRadius: "2px", overflow: "hidden" }}>
+              <div style={{ border: "0.5px solid var(--border-color)", borderRadius: "2px", overflow: "hidden" }}>
                 {g.items.map((r, i) => <Row key={r.username + i} r={r} last={i === g.items.length - 1} />)}
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <div style={{ border: "0.5px solid #e6e6e6", borderRadius: "2px", overflow: "hidden" }}>
+        <div style={{ border: "0.5px solid var(--border-color)", borderRadius: "2px", overflow: "hidden" }}>
           {sorted.map((r, i) => <Row key={i} r={r} last={i === sorted.length - 1} />)}
         </div>
       )}
@@ -259,25 +269,25 @@ export default function HomePage() {
 
   /* style helpers */
   const primaryBtn = (dis: boolean): React.CSSProperties => ({
-    background: dis ? "#e6e6e6" : "#0d0d0d",
-    color: dis ? "#9b9b9b" : "#fff",
+    background: dis ? "var(--border-hover)" : "var(--text-primary)",
+    color: dis ? "var(--text-muted)" : "var(--bg-primary)",
     border: "none", borderRadius: "2px", padding: "8px 16px",
     fontSize: "13px", fontWeight: 500, cursor: dis ? "not-allowed" : "pointer",
     display: "flex", alignItems: "center", gap: "6px",
     whiteSpace: "nowrap" as const, flexShrink: 0, fontFamily: "inherit", transition: "background 0.1s",
   });
   const ghostBtn: React.CSSProperties = {
-    background: "transparent", border: "0.5px solid #cecece", borderRadius: "2px",
-    padding: "5px 10px", color: "#787878", fontSize: "12px", cursor: "pointer",
+    background: "transparent", border: "0.5px solid var(--border-hover)", borderRadius: "2px",
+    padding: "5px 10px", color: "var(--text-secondary)", fontSize: "12px", cursor: "pointer",
     display: "flex", alignItems: "center", gap: "4px", fontFamily: "inherit", transition: "all 0.1s",
   };
   const inputWrap: React.CSSProperties = {
-    display: "flex", alignItems: "center", border: "0.5px solid #cecece",
+    display: "flex", alignItems: "center", border: "0.5px solid var(--border-hover)",
     borderRadius: "2px", overflow: "hidden",
   };
   const textInput: React.CSSProperties = {
     flex: 1, background: "transparent", border: "none", outline: "none",
-    color: "#0d0d0d", fontSize: "14px", padding: "10px 6px", fontFamily: "inherit",
+    color: "var(--text-primary)", fontSize: "14px", padding: "10px 6px", fontFamily: "inherit",
   };
 
   const tabs = [
@@ -290,18 +300,19 @@ export default function HomePage() {
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#fff", color: "#0d0d0d" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg-primary)", color: "var(--text-primary)" }}>
 
       {/* header */}
-      <header style={{ borderBottom: "0.5px solid #e6e6e6", padding: "0 24px", height: "46px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, background: "rgba(255,255,255,0.96)", backdropFilter: "blur(6px)", zIndex: 10 }}>
+      <header style={{ borderBottom: "0.5px solid var(--border-color)", padding: "0 24px", height: "46px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, background: "rgba(10,10,11,0.92)", backdropFilter: "blur(6px)", zIndex: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
           <TonLogo />
           <span style={{ fontSize: "13px", fontWeight: 500, letterSpacing: "0.01em" }}>Fragment Username</span>
         </div>
-        <a href="https://fragment.com" target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: "12px", color: "#9b9b9b", textDecoration: "none", display: "flex", alignItems: "center", gap: "3px", transition: "color 0.1s" }}
-          onMouseEnter={e => (e.currentTarget.style.color = "#0d0d0d")}
-          onMouseLeave={e => (e.currentTarget.style.color = "#9b9b9b")}
+        <a
+          href="https://fragment.com" target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: "12px", color: "var(--text-muted)", textDecoration: "none", display: "flex", alignItems: "center", gap: "3px", transition: "color 0.1s" }}
+          onMouseEnter={e => (e.currentTarget.style.color = "var(--text-primary)")}
+          onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
         >
           fragment.com
           <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
@@ -313,19 +324,19 @@ export default function HomePage() {
         {/* title */}
         <div style={{ marginBottom: "32px" }}>
           <h1 style={{ fontSize: "21px", fontWeight: 500, margin: "0 0 5px", letterSpacing: "-0.01em" }}>Username Checker</h1>
-          <p style={{ fontSize: "13px", color: "#9b9b9b", margin: 0 }}>Check Telegram username availability on Fragment marketplace.</p>
+          <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: 0 }}>Check Telegram username availability on Fragment marketplace.</p>
         </div>
 
         {/* tabs */}
-        <div style={{ display: "flex", borderBottom: "0.5px solid #e6e6e6", marginBottom: "24px" }}>
+        <div style={{ display: "flex", borderBottom: "0.5px solid var(--border-color)", marginBottom: "24px" }}>
           {tabs.map(({ key, label, icon }) => (
             <button key={key}
               onClick={() => { setMode(key); setResult(null); setBatchRes([]); setSweepRes([]); setError(null); if (key === "history") void loadHistory(); }}
               style={{
                 padding: "9px 14px", border: "none",
-                borderBottom: mode === key ? "1.5px solid #0d0d0d" : "1.5px solid transparent",
+                borderBottom: mode === key ? "1.5px solid var(--text-primary)" : "1.5px solid transparent",
                 background: "transparent",
-                color: mode === key ? "#0d0d0d" : "#9b9b9b",
+                color: mode === key ? "var(--text-primary)" : "var(--text-muted)",
                 fontWeight: mode === key ? 500 : 400, fontSize: "13px", cursor: "pointer",
                 display: "flex", alignItems: "center", gap: "5px",
                 marginBottom: "-0.5px", fontFamily: "inherit", transition: "color 0.1s",
@@ -337,11 +348,12 @@ export default function HomePage() {
         {/* ── single ── */}
         {mode === "single" && (
           <div>
-            <div style={{ ...inputWrap, marginBottom: "8px" }}
-              onFocusCapture={e => (e.currentTarget.style.borderColor = "#0d0d0d")}
-              onBlurCapture={e => (e.currentTarget.style.borderColor = "#cecece")}
+            <div
+              style={{ ...inputWrap, marginBottom: "8px" }}
+              onFocusCapture={e => (e.currentTarget.style.borderColor = "var(--text-primary)")}
+              onBlurCapture={e => (e.currentTarget.style.borderColor = "var(--border-hover)")}
             >
-              <span style={{ padding: "0 0 0 14px", color: "#cecece", fontSize: "15px", userSelect: "none", flexShrink: 0 }}>@</span>
+              <span style={{ padding: "0 0 0 14px", color: "var(--border-hover)", fontSize: "15px", userSelect: "none", flexShrink: 0 }}>@</span>
               <input ref={inputRef} type="text" value={input}
                 onChange={e => { setInput(e.target.value); setResult(null); setError(null); }}
                 onKeyDown={e => { if (e.key === "Enter") void checkSingle(); }}
@@ -351,25 +363,25 @@ export default function HomePage() {
               />
               <button onClick={() => void checkSingle()} disabled={loading || !input.trim()}
                 style={primaryBtn(loading || !input.trim())}
-                onMouseEnter={e => { if (!loading && input.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#2d2d2d"; }}
-                onMouseLeave={e => { if (!loading && input.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#0d0d0d"; }}
+                onMouseEnter={e => { if (!loading && input.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#c8c8ca"; }}
+                onMouseLeave={e => { if (!loading && input.trim()) (e.currentTarget as HTMLButtonElement).style.background = "var(--text-primary)"; }}
               >
                 {loading ? <Spin /> : <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" /><path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>}
                 {loading ? "Checking" : "Check"}
               </button>
             </div>
-            <p style={{ fontSize: "11px", color: "#9b9b9b", marginBottom: "24px" }}>Enter · 3–32 chars · letters, numbers, underscores</p>
+            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "24px" }}>Enter · 3–32 chars · letters, numbers, underscores</p>
 
             {error && (
-              <div className="animate-fade-in" style={{ padding: "10px 14px", border: "0.5px solid #ec3425", borderRadius: "2px", color: "#ec3425", fontSize: "13px", marginBottom: "16px", display: "flex", gap: "8px" }}>
+              <div className="animate-fade-in" style={{ padding: "10px 14px", border: "0.5px solid var(--accent-red)", borderRadius: "2px", color: "var(--accent-red)", fontSize: "13px", marginBottom: "16px", display: "flex", gap: "8px" }}>
                 <span>—</span>{error}
               </div>
             )}
 
             {result && !error && (
-              <div className="animate-fade-in" style={{ border: "0.5px solid #e6e6e6", borderRadius: "2px", overflow: "hidden" }}>
-                <div style={{ padding: "8px 14px", background: "#f4f4f4", borderBottom: "0.5px solid #e6e6e6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: "11px", color: "#9b9b9b", fontFamily: "'Courier New', monospace" }}>fragment.com/username/{result.username}</span>
+              <div className="animate-fade-in" style={{ border: "0.5px solid var(--border-color)", borderRadius: "2px", overflow: "hidden" }}>
+                <div style={{ padding: "8px 14px", background: "var(--bg-secondary)", borderBottom: "0.5px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "'Courier New', monospace" }}>fragment.com/username/{result.username}</span>
                   <Badge status={result.status} />
                 </div>
                 <div style={{ padding: "14px" }}>
@@ -380,7 +392,7 @@ export default function HomePage() {
                         <span style={{ fontSize: "15px", fontWeight: 500 }}>@{result.username}</span>
                         {result.hasPremium && <Star />}
                       </div>
-                      {result.name && <div style={{ fontSize: "12px", color: "#9b9b9b", marginTop: "1px" }}>{result.name}</div>}
+                      {result.name && <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "1px" }}>{result.name}</div>}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
@@ -389,15 +401,15 @@ export default function HomePage() {
                       { href: `https://t.me/${result.username}`, label: "Open in Telegram", icon: null },
                     ].map(({ href, label, icon }) => (
                       <a key={href} href={href} target="_blank" rel="noopener noreferrer"
-                        style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "5px 10px", border: "0.5px solid #cecece", borderRadius: "2px", color: "#0d0d0d", textDecoration: "none", fontSize: "12px", transition: "background 0.1s" }}
-                        onMouseEnter={e => (e.currentTarget.style.background = "#f4f4f4")}
+                        style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "5px 10px", border: "0.5px solid var(--border-hover)", borderRadius: "2px", color: "var(--text-primary)", textDecoration: "none", fontSize: "12px", transition: "background 0.1s" }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-secondary)")}
                         onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                       >{icon}{label}</a>
                     ))}
                   </div>
                 </div>
                 {result.source && (
-                  <div style={{ padding: "5px 14px", borderTop: "0.5px solid #e6e6e6", background: "#f4f4f4", fontSize: "10px", color: "#9b9b9b" }}>Source: {result.source}</div>
+                  <div style={{ padding: "5px 14px", borderTop: "0.5px solid var(--border-color)", background: "var(--bg-secondary)", fontSize: "10px", color: "var(--text-muted)" }}>Source: {result.source}</div>
                 )}
               </div>
             )}
@@ -407,27 +419,27 @@ export default function HomePage() {
         {/* ── batch ── */}
         {mode === "batch" && (
           <div>
-            <div style={{ border: "0.5px solid #cecece", borderRadius: "2px", overflow: "hidden", marginBottom: "10px" }}>
-              <div style={{ padding: "7px 12px", background: "#f4f4f4", borderBottom: "0.5px solid #e6e6e6", display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "11px", color: "#9b9b9b" }}>One per line · comma or semicolon separated</span>
-                <span style={{ fontSize: "11px", color: "#9b9b9b", fontFamily: "'Courier New', monospace" }}>
+            <div style={{ border: "0.5px solid var(--border-hover)", borderRadius: "2px", overflow: "hidden", marginBottom: "10px" }}>
+              <div style={{ padding: "7px 12px", background: "var(--bg-secondary)", borderBottom: "0.5px solid var(--border-color)", display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>One per line · comma or semicolon separated</span>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "'Courier New', monospace" }}>
                   {batchInput.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).length}/200
                 </span>
               </div>
               <textarea value={batchInput}
                 onChange={e => { setBatchInput(e.target.value); setError(null); setBatchRes([]); }}
                 placeholder={"username1\nusername2\nusername3"} rows={8}
-                style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: "#0d0d0d", fontSize: "13px", fontFamily: "'Courier New', monospace", padding: "10px 12px", resize: "vertical", lineHeight: 1.6 }}
+                style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: "var(--text-primary)", fontSize: "13px", fontFamily: "'Courier New', monospace", padding: "10px 12px", resize: "vertical", lineHeight: 1.6 }}
               />
             </div>
             <button onClick={() => void checkBatch()} disabled={loading || !batchInput.trim()}
               style={{ ...primaryBtn(loading || !batchInput.trim()), width: "100%", justifyContent: "center", marginBottom: "18px" }}
-              onMouseEnter={e => { if (!loading && batchInput.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#2d2d2d"; }}
-              onMouseLeave={e => { if (!loading && batchInput.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#0d0d0d"; }}
+              onMouseEnter={e => { if (!loading && batchInput.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#c8c8ca"; }}
+              onMouseLeave={e => { if (!loading && batchInput.trim()) (e.currentTarget as HTMLButtonElement).style.background = "var(--text-primary)"; }}
             >
               {loading ? <><Spin />Checking</> : "Check all"}
             </button>
-            {error && <div style={{ padding: "10px 14px", border: "0.5px solid #ec3425", borderRadius: "2px", color: "#ec3425", fontSize: "13px", marginBottom: "14px" }}>— {error}</div>}
+            {error && <div style={{ padding: "10px 14px", border: "0.5px solid var(--accent-red)", borderRadius: "2px", color: "var(--accent-red)", fontSize: "13px", marginBottom: "14px" }}>— {error}</div>}
             {batchRes.length > 0 && <Results results={batchRes} sort={batchSort} setSort={setBatchSort} />}
           </div>
         )}
@@ -435,14 +447,15 @@ export default function HomePage() {
         {/* ── sweep ── */}
         {mode === "sweep" && (
           <div>
-            <div style={{ padding: "9px 12px", background: "#f4f4f4", border: "0.5px solid #e6e6e6", borderRadius: "2px", fontSize: "12px", color: "#787878", marginBottom: "18px", lineHeight: 1.6 }}>
+            <div style={{ padding: "9px 12px", background: "var(--bg-secondary)", border: "0.5px solid var(--border-color)", borderRadius: "2px", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "18px", lineHeight: 1.6 }}>
               Checks the original username + all 26 letter variants (a–z). Total: 27 requests.
             </div>
-            <div style={{ ...inputWrap, marginBottom: "10px" }}
-              onFocusCapture={e => (e.currentTarget.style.borderColor = "#0d0d0d")}
-              onBlurCapture={e => (e.currentTarget.style.borderColor = "#cecece")}
+            <div
+              style={{ ...inputWrap, marginBottom: "10px" }}
+              onFocusCapture={e => (e.currentTarget.style.borderColor = "var(--text-primary)")}
+              onBlurCapture={e => (e.currentTarget.style.borderColor = "var(--border-hover)")}
             >
-              <span style={{ padding: "0 0 0 14px", color: "#cecece", fontSize: "15px", flexShrink: 0 }}>@</span>
+              <span style={{ padding: "0 0 0 14px", color: "var(--border-hover)", fontSize: "15px", flexShrink: 0 }}>@</span>
               <input type="text" value={sweepInput}
                 onChange={e => { setSweepInput(e.target.value); setError(null); setSweepRes([]); }}
                 onKeyDown={e => { if (e.key === "Enter") void checkSweep(); }}
@@ -452,21 +465,21 @@ export default function HomePage() {
               />
               <button onClick={() => void checkSweep()} disabled={loading || !sweepInput.trim()}
                 style={primaryBtn(loading || !sweepInput.trim())}
-                onMouseEnter={e => { if (!loading && sweepInput.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#2d2d2d"; }}
-                onMouseLeave={e => { if (!loading && sweepInput.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#0d0d0d"; }}
+                onMouseEnter={e => { if (!loading && sweepInput.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#c8c8ca"; }}
+                onMouseLeave={e => { if (!loading && sweepInput.trim()) (e.currentTarget as HTMLButtonElement).style.background = "var(--text-primary)"; }}
               >
                 {loading ? <><Spin />Sweeping</> : "Sweep"}
               </button>
             </div>
 
             <div style={{ display: "flex", gap: "4px", alignItems: "center", marginBottom: "16px" }}>
-              <span style={{ fontSize: "11px", color: "#9b9b9b", marginRight: "4px" }}>Append</span>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", marginRight: "4px" }}>Append</span>
               {(["suffix", "prefix"] as const).map(k => (
                 <button key={k} onClick={() => setSweepPos(k)} style={{
                   background: "transparent",
-                  border: "0.5px solid " + (sweepPos === k ? "#0d0d0d" : "#cecece"),
+                  border: "0.5px solid " + (sweepPos === k ? "var(--text-primary)" : "var(--border-hover)"),
                   borderRadius: "2px", padding: "3px 10px",
-                  color: sweepPos === k ? "#0d0d0d" : "#9b9b9b",
+                  color: sweepPos === k ? "var(--text-primary)" : "var(--text-muted)",
                   fontSize: "11px", fontWeight: sweepPos === k ? 500 : 400,
                   cursor: "pointer", fontFamily: "'Courier New', monospace", transition: "all 0.1s",
                 }}>
@@ -479,32 +492,32 @@ export default function HomePage() {
               <div style={{ display: "flex", gap: "3px", flexWrap: "wrap", marginBottom: "18px" }}>
                 {[sweepInput.trim().toLowerCase(), ...ALPHA.slice(0, 6).map(l => sweepPos === "suffix" ? `${sweepInput.trim().toLowerCase()}${l}` : `${l}${sweepInput.trim().toLowerCase()}`)].map((u, i) => (
                   <span key={i} style={{
-                    background: i === 0 ? "#0d0d0d" : "#f4f4f4",
-                    border: "0.5px solid " + (i === 0 ? "#0d0d0d" : "#e6e6e6"),
+                    background: i === 0 ? "var(--text-primary)" : "var(--bg-secondary)",
+                    border: "0.5px solid " + (i === 0 ? "var(--text-primary)" : "var(--border-color)"),
                     borderRadius: "2px", padding: "2px 7px", fontSize: "11px",
-                    color: i === 0 ? "#fff" : "#787878",
+                    color: i === 0 ? "var(--bg-primary)" : "var(--text-secondary)",
                     fontFamily: "'Courier New', monospace",
                   }}>{u}</span>
                 ))}
-                <span style={{ fontSize: "11px", color: "#9b9b9b", alignSelf: "center" }}>+{26 - 6} more</span>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)", alignSelf: "center" }}>+{26 - 6} more</span>
               </div>
             )}
 
-            {error && <div style={{ padding: "10px 14px", border: "0.5px solid #ec3425", borderRadius: "2px", color: "#ec3425", fontSize: "13px", marginBottom: "14px" }}>— {error}</div>}
+            {error && <div style={{ padding: "10px 14px", border: "0.5px solid var(--accent-red)", borderRadius: "2px", color: "var(--accent-red)", fontSize: "13px", marginBottom: "14px" }}>— {error}</div>}
 
             {sweepRes.length > 0 && (
               <div className="animate-fade-in">
                 {sweepRes[0] && (
                   <div style={{ marginBottom: "14px" }}>
-                    <div style={{ fontSize: "10px", fontWeight: 500, color: "#9b9b9b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "5px" }}>Original</div>
-                    <div style={{ border: "0.5px solid #0d0d0d", borderRadius: "2px", overflow: "hidden" }}>
+                    <div style={{ fontSize: "10px", fontWeight: 500, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "5px" }}>Original</div>
+                    <div style={{ border: "0.5px solid var(--text-primary)", borderRadius: "2px", overflow: "hidden" }}>
                       <Row r={sweepRes[0]} last={true} />
                     </div>
                   </div>
                 )}
                 {sweepRes.length > 1 && (
                   <div>
-                    <div style={{ fontSize: "10px", fontWeight: 500, color: "#9b9b9b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "5px" }}>Letter variants a–z</div>
+                    <div style={{ fontSize: "10px", fontWeight: 500, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "5px" }}>Letter variants a–z</div>
                     <Results results={sweepRes.slice(1)} sort={sweepSort} setSort={setSweepSort} />
                   </div>
                 )}
@@ -521,16 +534,16 @@ export default function HomePage() {
               <div style={{ display: "flex", gap: "4px" }}>
                 <button onClick={() => void loadHistory()} style={ghostBtn}>{histLoad ? <Spin sz={11} /> : "↻"} Refresh</button>
                 {history.length > 0 && (
-                  <button onClick={() => void clearHistory()} style={{ ...ghostBtn, color: clearOk ? "#ec3425" : "#787878", borderColor: clearOk ? "#ec3425" : "#cecece" }}>
+                  <button onClick={() => void clearHistory()} style={{ ...ghostBtn, color: clearOk ? "var(--accent-red)" : "var(--text-secondary)", borderColor: clearOk ? "var(--accent-red)" : "var(--border-hover)" }}>
                     {clearOk ? "Sure?" : "Clear"}
                   </button>
                 )}
               </div>
             </div>
             {history.length === 0 ? (
-              <div style={{ padding: "32px 16px", textAlign: "center", border: "0.5px solid #e6e6e6", borderRadius: "2px", color: "#9b9b9b", fontSize: "13px" }}>No checks yet.</div>
+              <div style={{ padding: "32px 16px", textAlign: "center", border: "0.5px solid var(--border-color)", borderRadius: "2px", color: "var(--text-muted)", fontSize: "13px" }}>No checks yet.</div>
             ) : (
-              <div style={{ border: "0.5px solid #e6e6e6", borderRadius: "2px", overflow: "hidden" }}>
+              <div style={{ border: "0.5px solid var(--border-color)", borderRadius: "2px", overflow: "hidden" }}>
                 {history.map((item, i) => (
                   <div key={item.id} style={{ display: "flex", alignItems: "center", padding: "9px 14px", gap: "10px", ...(i < history.length - 1 ? DLBDR : {}) }}>
                     <Ava username={item.username} sz={22} />
@@ -538,13 +551,13 @@ export default function HomePage() {
                       <div style={{ fontSize: "13px", fontWeight: 500, display: "flex", alignItems: "center", gap: "4px" }}>
                         @{item.username}{item.hasPremium === "true" && <Star />}
                       </div>
-                      <div style={{ fontSize: "10px", color: "#9b9b9b", fontFamily: "'Courier New', monospace" }}>{fmtDate(item.checkedAt)}</div>
+                      <div style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "'Courier New', monospace" }}>{fmtDate(item.checkedAt)}</div>
                     </div>
                     <Badge status={item.status} />
                     <a href={`https://fragment.com/username/${item.username}`} target="_blank" rel="noopener noreferrer"
-                      style={{ color: "#cecece", textDecoration: "none", flexShrink: 0, transition: "color 0.1s" }}
-                      onMouseEnter={e => (e.currentTarget.style.color = "#0d0d0d")}
-                      onMouseLeave={e => (e.currentTarget.style.color = "#cecece")}
+                      style={{ color: "var(--border-hover)", textDecoration: "none", flexShrink: 0, transition: "color 0.1s" }}
+                      onMouseEnter={e => (e.currentTarget.style.color = "var(--text-primary)")}
+                      onMouseLeave={e => (e.currentTarget.style.color = "var(--border-hover)")}
                     >
                       <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
                     </a>
@@ -557,11 +570,11 @@ export default function HomePage() {
       </main>
 
       {/* footer */}
-      <footer style={{ borderTop: "0.5px solid #e6e6e6", padding: "14px 24px" }}>
-        <p style={{ fontSize: "11px", color: "#9b9b9b", margin: 0, display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+      <footer style={{ borderTop: "0.5px solid var(--border-color)", padding: "14px 24px" }}>
+        <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: 0, display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
           <TonLogo />
           <a href="https://fragment.com" target="_blank" rel="noopener noreferrer"
-            style={{ color: "#0d0d0d", textDecoration: "none" }}
+            style={{ color: "var(--text-primary)", textDecoration: "none" }}
             onMouseEnter={e => (e.currentTarget.style.textDecoration = "underline")}
             onMouseLeave={e => (e.currentTarget.style.textDecoration = "none")}
           >Fragment</a>

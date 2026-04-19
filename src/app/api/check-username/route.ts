@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { usernameChecks } from "@/db/schema";
-import { desc } from "drizzle-orm";
 
 const FRAGMENT_API_KEY = process.env.FRAGMENT_API_KEY ?? "9c5d52da-e56f-42dd-8043-e115c1cf1c04";
 const FRAGMENT_API_BASE = "https://api.fragment-api.com";
 const FRAGMENT_BASE = "https://fragment.com/";
+
+/**
+ * Case-based availability heuristic:
+ * If the original input has any uppercase letter → Available (no API call needed).
+ * Telegram usernames are always lowercase, so uppercase = the username doesn't exist as typed.
+ */
+function hasCaseAvailability(rawUsername: string): boolean {
+  return /[A-Z]/.test(rawUsername);
+}
 
 async function checkViaFragmentScrape(username: string): Promise<{
   status: string;
@@ -79,36 +87,58 @@ async function checkViaFragmentAPI(username: string): Promise<{
       has_premium: boolean | null;
     };
 
-    return { status: "Taken", name: data.name, photo: data.photo, hasPremium: data.has_premium, source: "fragment-api.com" };
+    // Case heuristic on API response: if returned username has uppercase → Available
+    if (/[A-Z]/.test(data.username ?? "")) {
+      return { status: "Available", name: null, photo: null, hasPremium: null, source: "fragment-api.com" };
+    }
+
+    return {
+      status: "Taken",
+      name: data.name,
+      photo: data.photo,
+      hasPremium: data.has_premium,
+      source: "fragment-api.com",
+    };
   } catch {
     return null;
   }
 }
 
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const username = searchParams.get("username")?.trim().replace(/^@/, "");
+async function checkOne(rawUsername: string): Promise<{
+  username: string;
+  status: string;
+  name?: string | null;
+  photo?: string | null;
+  hasPremium?: boolean | null;
+  source: string;
+  error?: boolean;
+}> {
+  const username = rawUsername.trim().replace(/^@/, "");
 
-  if (!username) {
-    return NextResponse.json({ error: "Username is required" }, { status: 400 });
+  if (!username || !/^[a-zA-Z][a-zA-Z0-9_]{2,31}$/.test(username)) {
+    return { username: username || rawUsername, status: "Invalid", source: "", error: true };
   }
 
-  if (!/^[a-zA-Z][a-zA-Z0-9_]{2,31}$/.test(username)) {
-    return NextResponse.json(
-      { error: "Invalid username format. Must start with a letter, 3–32 characters, only letters/numbers/underscores." },
-      { status: 400 }
-    );
+  // Case-based shortcut: uppercase in input → Available immediately
+  if (hasCaseAvailability(username)) {
+    const normalized = username.toLowerCase();
+    try {
+      await db.insert(usernameChecks).values({
+        username: normalized,
+        status: "Available",
+        name: null,
+        photo: null,
+        hasPremium: null,
+      });
+    } catch { /* ignore */ }
+    return { username, status: "Available", name: null, photo: null, hasPremium: null, source: "case-check" };
   }
 
-  let result = await checkViaFragmentAPI(username);
-  let source = "fragment-api.com";
-
+  // Normal API check (lowercase only)
+  let result = await checkViaFragmentAPI(username.toLowerCase());
   if (!result) {
-    const scraped = await checkViaFragmentScrape(username);
+    const scraped = await checkViaFragmentScrape(username.toLowerCase());
     result = { ...scraped, name: null, photo: null, hasPremium: null };
-    source = "fragment.com";
-  } else {
-    source = result.source;
   }
 
   try {
@@ -121,14 +151,34 @@ export async function GET(req: NextRequest) {
     });
   } catch { /* ignore */ }
 
-  return NextResponse.json({
+  return {
     username,
     status: result.status,
     name: result.name ?? null,
     photo: result.photo ?? null,
     hasPremium: result.hasPremium ?? null,
-    source,
-  });
+    source: result.source,
+  };
+}
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const raw = searchParams.get("username") ?? "";
+
+  if (!raw.trim()) {
+    return NextResponse.json({ error: "Username is required" }, { status: 400 });
+  }
+
+  const result = await checkOne(raw);
+
+  if (result.error) {
+    return NextResponse.json(
+      { error: "Invalid username format. Must start with a letter, 3–32 characters, only letters/numbers/underscores." },
+      { status: 400 }
+    );
+  }
+
+  return NextResponse.json(result);
 }
 
 export async function POST(req: NextRequest) {
@@ -139,46 +189,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "usernames array is required" }, { status: 400 });
   }
 
-  if (usernames.length > 500) {
-    return NextResponse.json({ error: "Max 500 usernames per batch" }, { status: 400 });
+  if (usernames.length > 100) {
+    return NextResponse.json({ error: "Max 100 usernames per batch" }, { status: 400 });
   }
 
-  const results = await Promise.allSettled(
-    usernames.map(async (raw) => {
-      const username = raw.trim().replace(/^@/, "");
-      if (!username || !/^[a-zA-Z][a-zA-Z0-9_]{2,31}$/.test(username)) {
-        return { username, status: "Invalid", error: true };
-      }
+  const settled = await Promise.allSettled(usernames.map((raw) => checkOne(raw)));
 
-      let result = await checkViaFragmentAPI(username);
-      if (!result) {
-        const scraped = await checkViaFragmentScrape(username);
-        result = { ...scraped, name: null, photo: null, hasPremium: null };
-      }
-
-      try {
-        await db.insert(usernameChecks).values({
-          username: username.toLowerCase(),
-          status: result.status,
-          name: result.name ?? null,
-          photo: result.photo ?? null,
-          hasPremium: result.hasPremium != null ? String(result.hasPremium) : null,
-        });
-      } catch { /* ignore */ }
-
-      return {
-        username,
-        status: result.status,
-        name: result.name ?? null,
-        photo: result.photo ?? null,
-        hasPremium: result.hasPremium ?? null,
-        source: result.source,
-      };
-    })
-  );
-
-  const data = results.map((r) =>
-    r.status === "fulfilled" ? r.value : { username: "?", status: "Error", error: true }
+  const data = settled.map((r) =>
+    r.status === "fulfilled" ? r.value : { username: "?", status: "Error", source: "", error: true }
   );
 
   return NextResponse.json({ results: data });

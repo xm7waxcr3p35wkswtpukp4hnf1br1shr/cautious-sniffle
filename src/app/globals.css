@@ -1,48 +1,110 @@
 @import "tailwindcss";
 
-:root {
-  --bg-primary:    #0a0a0b;
-  --bg-secondary:  #111114;
-  --bg-card:       #111114;
-  --bg-input:      #111114;
-  --border-color:  #1e1e22;
-  --border-hover:  #2e2e34;
-  --text-primary:  #e8e8ea;
-  --text-secondary:#6a6a72;
-  --text-muted:    #44444c;
-  --accent-blue:   #3d8ef0;
-  --accent-green:  #3dcc70;
-  --accent-red:    #f04545;
-  --accent-yellow: #e09832;
-  --ton-blue:      #0098ea;
+@font-face {
+  font-family: "AnonymousPro";
+  src: url("/fonts/AnonymiceProNerdFont-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
 
-* { box-sizing: border-box; }
+@font-face {
+  font-family: "AnonymousPro";
+  src: url("/fonts/AnonymiceProNerdFont-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
-html { background-color: var(--bg-primary); scroll-behavior: smooth; }
+:root {
+  --font-mono: "AnonymousPro", "Courier New", monospace;
+
+  --bg-0:      #0d0d0f;
+  --bg-1:      #111113;
+  --bg-2:      #161618;
+  --bg-3:      #1b1b1e;
+
+  --line:      rgba(255,255,255,0.07);
+  --line-hi:   rgba(255,255,255,0.13);
+
+  --t-0:       #f0f0f2;
+  --t-1:       #9494a0;
+  --t-2:       #55555f;
+  --t-3:       #33333c;
+
+  --ton:       #0098ea;
+  --ton-dim:   rgba(0,152,234,0.15);
+  --ton-glow:  rgba(0,152,234,0.06);
+
+  --green:     #35c96b;
+  --green-dim: rgba(53,201,107,0.12);
+  --red:       #f04040;
+  --red-dim:   rgba(240,64,64,0.12);
+  --yellow:    #e8a030;
+  --yellow-dim:rgba(232,160,48,0.12);
+  --muted-dim: rgba(80,80,92,0.14);
+
+  --r:         2px;
+  --transition: 120ms ease;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  background: var(--bg-0);
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
 
 body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background: var(--bg-0);
+  color: var(--t-0);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
   min-height: 100vh;
   margin: 0;
   padding: 0;
-  font-size: 14px;
-  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--bg-primary); }
-::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 0; }
-::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line-hi); border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: var(--t-2); }
 
-@keyframes spin { to { transform: rotate(360deg); } }
-.animate-spin { animation: spin 0.8s linear infinite; }
+/* ── Selection ── */
+::selection { background: var(--ton-dim); color: var(--t-0); }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(3px); }
+/* ── Focus ── */
+:focus-visible { outline: 1px solid var(--ton); outline-offset: 2px; }
+
+/* ── Animations ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.animate-spin { animation: spin 0.7s linear infinite; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(5px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.animate-fade-in { animation: fadeIn 0.18s ease forwards; }
+.fade-up { animation: fadeUp 0.2s ease forwards; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ── Scanline noise texture overlay ── */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+  opacity: 0.4;
+}

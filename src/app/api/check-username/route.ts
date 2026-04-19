@@ -7,7 +7,6 @@ const FRAGMENT_API_KEY = process.env.FRAGMENT_API_KEY ?? "9c5d52da-e56f-42dd-804
 const FRAGMENT_API_BASE = "https://api.fragment-api.com";
 const FRAGMENT_BASE = "https://fragment.com/";
 
-// Fallback: check via Fragment.com HTML scraping (same as Python script)
 async function checkViaFragmentScrape(username: string): Promise<{
   status: string;
   source: string;
@@ -15,8 +14,7 @@ async function checkViaFragmentScrape(username: string): Promise<{
   try {
     const response = await fetch(FRAGMENT_BASE + "username/" + username, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246",
         "X-Aj-Referer": `${FRAGMENT_BASE}?query=${username}`,
         Accept: "application/json, text/javascript, */*; q=0.01",
         "Accept-Language": "en-US,en;q=0.5",
@@ -48,16 +46,12 @@ async function checkViaFragmentScrape(username: string): Promise<{
       "tm-status-unavail": "Sold",
     };
 
-    return {
-      status: statusMap[rawStatus] ?? "Unknown",
-      source: "fragment.com",
-    };
+    return { status: statusMap[rawStatus] ?? "Unknown", source: "fragment.com" };
   } catch {
     return { status: "Unknown", source: "fragment.com" };
   }
 }
 
-// Primary: check via Fragment unofficial API
 async function checkViaFragmentAPI(username: string): Promise<{
   status: string;
   name?: string | null;
@@ -74,17 +68,9 @@ async function checkViaFragmentAPI(username: string): Promise<{
       signal: AbortSignal.timeout(8000),
     });
 
-    if (res.status === 404) {
-      return { status: "Available", source: "fragment-api.com" };
-    }
-
-    if (res.status === 400) {
-      return null; // fallback
-    }
-
-    if (!res.ok) {
-      return null;
-    }
+    if (res.status === 404) return { status: "Available", source: "fragment-api.com" };
+    if (res.status === 400) return null;
+    if (!res.ok) return null;
 
     const data = (await res.json()) as {
       username: string;
@@ -93,13 +79,7 @@ async function checkViaFragmentAPI(username: string): Promise<{
       has_premium: boolean | null;
     };
 
-    return {
-      status: "Taken",
-      name: data.name,
-      photo: data.photo,
-      hasPremium: data.has_premium,
-      source: "fragment-api.com",
-    };
+    return { status: "Taken", name: data.name, photo: data.photo, hasPremium: data.has_premium, source: "fragment-api.com" };
   } catch {
     return null;
   }
@@ -113,18 +93,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Username is required" }, { status: 400 });
   }
 
-  // Validate username pattern
   if (!/^[a-zA-Z][a-zA-Z0-9_]{2,31}$/.test(username)) {
     return NextResponse.json(
-      {
-        error:
-          "Invalid username format. Must start with a letter, 3–32 characters, only letters/numbers/underscores.",
-      },
+      { error: "Invalid username format. Must start with a letter, 3–32 characters, only letters/numbers/underscores." },
       { status: 400 }
     );
   }
 
-  // Try Fragment API first, fallback to scraping
   let result = await checkViaFragmentAPI(username);
   let source = "fragment-api.com";
 
@@ -136,7 +111,6 @@ export async function GET(req: NextRequest) {
     source = result.source;
   }
 
-  // Save to DB
   try {
     await db.insert(usernameChecks).values({
       username: username.toLowerCase(),
@@ -145,9 +119,7 @@ export async function GET(req: NextRequest) {
       photo: result.photo ?? null,
       hasPremium: result.hasPremium != null ? String(result.hasPremium) : null,
     });
-  } catch {
-    // DB errors shouldn't block the response
-  }
+  } catch { /* ignore */ }
 
   return NextResponse.json({
     username,
@@ -160,7 +132,6 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  // Batch check multiple usernames
   const body = (await req.json()) as { usernames: string[] };
   const usernames: string[] = body.usernames ?? [];
 
@@ -168,8 +139,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "usernames array is required" }, { status: 400 });
   }
 
-  if (usernames.length > 1000) {
-    return NextResponse.json({ error: "Max 1000 usernames per batch" }, { status: 400 });
+  if (usernames.length > 100) {
+    return NextResponse.json({ error: "Max 100 usernames per batch" }, { status: 400 });
   }
 
   const results = await Promise.allSettled(
@@ -193,9 +164,7 @@ export async function POST(req: NextRequest) {
           photo: result.photo ?? null,
           hasPremium: result.hasPremium != null ? String(result.hasPremium) : null,
         });
-      } catch {
-        // ignore
-      }
+      } catch { /* ignore */ }
 
       return {
         username,

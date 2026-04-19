@@ -306,10 +306,6 @@ export default function HomePage() {
     <div style={{ minHeight: "100vh", background: "var(--bg-primary)", color: "var(--text-primary)" }}>
 
       {/* ── Header ── */}
-      <header style={{ borderBottom: "1px solid var(--border-color)", background: "rgba(21,30,39,0.95)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 24px", height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
             <a href="https://fragment.com" target="_blank" rel="noopener noreferrer"
               style={{ fontSize: "13px", color: "var(--text-secondary)", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px" }}

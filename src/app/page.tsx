@@ -5,7 +5,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 /* ── Types ─────────────────────────────────────────────── */
 type CheckResult = {
   username: string;
-  status: "Available" | "Taken" | "For Sale" | "Sold" | "Unknown" | "Invalid" | string;
+  status: "Available" | "Taken" | "For Sale" | "Sold" | "Reserved" | "Unknown" | "Invalid" | string;
   name?: string | null;
   photo?: string | null;
   hasPremium?: boolean | null;
@@ -31,12 +31,13 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot
   Taken:      { label: "Taken",     color: "var(--red)",    bg: "var(--red-dim)",    dot: "#f04040" },
   "For Sale": { label: "For Sale",  color: "var(--yellow)", bg: "var(--yellow-dim)", dot: "#e8a030" },
   Sold:       { label: "Sold",      color: "var(--t-2)",    bg: "var(--muted-dim)",  dot: "#55555f" },
+  Reserved:   { label: "Reserved",  color: "var(--ton)",    bg: "var(--ton-glow)",   dot: "#0098ea" },
   Invalid:    { label: "Invalid",   color: "var(--red)",    bg: "var(--red-dim)",    dot: "#f04040" },
   Unknown:    { label: "Unknown",   color: "var(--t-2)",    bg: "var(--muted-dim)",  dot: "#55555f" },
 };
 const getS = (s: string) => STATUS_CFG[s] ?? { label: s, color: "var(--t-2)", bg: "var(--muted-dim)", dot: "#55555f" };
 
-const STATUS_ORDER = ["Available", "For Sale", "Sold", "Taken", "Unknown", "Invalid"];
+const STATUS_ORDER = ["Available", "For Sale", "Reserved", "Sold", "Taken", "Unknown", "Invalid"];
 const ALPHA = "abcdefghijklmnopqrstuvwxyz".split("");
 
 /* ── Shared style constants ─────────────────────────────── */
@@ -108,7 +109,6 @@ function Avatar({ username, photo, size = 28 }: { username: string; photo?: stri
   if (photo) {
     return <img src={photo} alt={username} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: "1px solid var(--line)" }} />;
   }
-  // Hash the letter to a hue
   const hue = (letter.charCodeAt(0) * 47) % 360;
   return (
     <div style={{
@@ -475,8 +475,6 @@ export default function HomePage() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-0)", color: "var(--t-0)", display: "flex", flexDirection: "column" }}>
 
-      {/* ── Top bar ── */}
-
       {/* ── Main ── */}
       <main style={{ maxWidth: "600px", width: "100%", margin: "0 auto", padding: "36px 24px 80px", flex: 1 }}>
 
@@ -585,6 +583,11 @@ export default function HomePage() {
                       </div>
                       {result.name && (
                         <div style={{ fontSize: "12px", color: "var(--t-2)", marginTop: "2px", ...FONT }}>{result.name}</div>
+                      )}
+                      {result.status === "Reserved" && (
+                        <div style={{ fontSize: "11px", color: "var(--ton)", marginTop: "4px", ...FONT }}>
+                          Reserved by Telegram · cannot be registered
+                        </div>
                       )}
                     </div>
                   </div>

@@ -111,7 +111,11 @@ function ResultRow({ r, isLast }: { r: CheckResult; isLast: boolean }) {
   );
 }
 
-function BatchResultsView({ results, sortMode, setSortMode }: { results: CheckResult[]; sortMode: string; setSortMode: (m: "none" | "az" | "za" | "group") => void }) {
+function BatchResultsView({ results, sortMode, setSortMode }: {
+  results: CheckResult[];
+  sortMode: "none" | "az" | "za" | "group";
+  setSortMode: (m: "none" | "az" | "za" | "group") => void;
+}) {
   const sortButtons: { key: "none" | "az" | "za" | "group"; label: string }[] = [
     { key: "none", label: "Default" },
     { key: "az", label: "A → Z" },
@@ -140,7 +144,6 @@ function BatchResultsView({ results, sortMode, setSortMode }: { results: CheckRe
 
   return (
     <div>
-      {/* Summary */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: "10px", marginBottom: "18px" }}>
         {(["Available", "Taken", "For Sale", "Sold", "Unknown", "Invalid"] as const).map((s) => {
           const count = results.filter((r) => r.status === s).length;
@@ -155,7 +158,6 @@ function BatchResultsView({ results, sortMode, setSortMode }: { results: CheckRe
         })}
       </div>
 
-      {/* Sort controls */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px", gap: "6px", alignItems: "center" }}>
         <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Sort:</span>
         {sortButtons.map(({ key, label }) => (
@@ -165,7 +167,6 @@ function BatchResultsView({ results, sortMode, setSortMode }: { results: CheckRe
         ))}
       </div>
 
-      {/* Rows */}
       {sortMode === "group" && grouped ? (
         <div>
           {grouped.map((group) => {
@@ -200,7 +201,6 @@ export default function HomePage() {
   const [sweepPosition, setSweepPosition] = useState<"suffix" | "prefix">("suffix");
   const [mode, setMode] = useState<"single" | "batch" | "sweep">("single");
   const [loading, setLoading] = useState(false);
-  const [sweepProgress, setSweepProgress] = useState(0);
   const [result, setResult] = useState<CheckResult | null>(null);
   const [batchResults, setBatchResults] = useState<CheckResult[]>([]);
   const [sweepResults, setSweepResults] = useState<CheckResult[]>([]);
@@ -224,13 +224,9 @@ export default function HomePage() {
 
   useEffect(() => { void fetchHistory(); }, [fetchHistory]);
 
-  // Case-based check on client side too (immediate feedback)
-  const getCaseStatus = (raw: string): "Available" | null => {
-    return /[A-Z]/.test(raw.replace(/^@/, "")) ? "Available" : null;
-  };
-
   const checkSingle = useCallback(async () => {
-    const username = input.trim().replace(/^@/, "");
+    // Normalize to lowercase before sending
+    const username = input.trim().replace(/^@/, "").toLowerCase();
     if (!username) return;
     setLoading(true); setError(null); setResult(null);
     try {
@@ -243,7 +239,10 @@ export default function HomePage() {
   }, [input, fetchHistory]);
 
   const checkBatch = useCallback(async () => {
-    const lines = batchInput.split(/[\n,;]+/).map((s) => s.trim().replace(/^@/, "")).filter(Boolean);
+    const lines = batchInput
+      .split(/[\n,;]+/)
+      .map((s) => s.trim().replace(/^@/, "").toLowerCase())
+      .filter(Boolean);
     if (lines.length === 0) return;
     if (lines.length > 200) { setError("Max 200 usernames per batch."); return; }
     setLoading(true); setError(null); setBatchResults([]); setBatchSortMode("none");
@@ -261,14 +260,10 @@ export default function HomePage() {
   }, [batchInput, fetchHistory]);
 
   const checkSweep = useCallback(async () => {
-    const base = sweepInput.trim().replace(/^@/, "");
+    const base = sweepInput.trim().replace(/^@/, "").toLowerCase();
     if (!base) return;
-
-    // Build list: original first, then base+a, base+b, ...
     const candidates = [base, ...ALPHABET.map((l) => sweepPosition === "suffix" ? `${base}${l}` : `${l}${base}`)];
-
-    setLoading(true); setError(null); setSweepResults([]); setSweepSortMode("none"); setSweepProgress(0);
-
+    setLoading(true); setError(null); setSweepResults([]); setSweepSortMode("none");
     try {
       const res = await fetch("/api/check-username", {
         method: "POST",
@@ -279,7 +274,7 @@ export default function HomePage() {
       if (!res.ok) setError(data.error ?? "Something went wrong");
       else { setSweepResults(data.results ?? []); void fetchHistory(); }
     } catch { setError("Network error. Please try again."); }
-    finally { setLoading(false); setSweepProgress(0); }
+    finally { setLoading(false); }
   }, [sweepInput, sweepPosition, fetchHistory]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -293,9 +288,6 @@ export default function HomePage() {
       return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
     } catch { return dateStr; }
   };
-
-  // Instant case feedback for single input
-  const caseHint = getCaseStatus(input);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-primary)", color: "var(--text-primary)" }}>
@@ -365,7 +357,7 @@ export default function HomePage() {
         {/* ── Single Mode ── */}
         {mode === "single" && (
           <div>
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "14px", padding: "6px 6px 6px 20px", display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px", boxShadow: "0 4px 24px rgba(0,0,0,0.2)" }}>
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "14px", padding: "6px 6px 6px 20px", display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px", boxShadow: "0 4px 24px rgba(0,0,0,0.2)" }}>
               <span style={{ color: "var(--text-muted)", fontSize: "18px", fontWeight: 500, userSelect: "none", flexShrink: 0 }}>@</span>
               <input ref={inputRef} type="text" value={input}
                 onChange={(e) => { setInput(e.target.value); setResult(null); setError(null); }}
@@ -379,14 +371,6 @@ export default function HomePage() {
                 {loading ? (<><Spinner />Checking...</>) : (<><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="white" strokeWidth="2" /><path d="M21 21l-4.35-4.35" stroke="white" strokeWidth="2" strokeLinecap="round" /></svg>Check</>)}
               </button>
             </div>
-
-            {/* Instant case hint */}
-            {caseHint && input.trim() && (
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px", padding: "8px 14px", background: "rgba(46,196,94,0.08)", border: "1px solid rgba(46,196,94,0.25)", borderRadius: "8px", fontSize: "12px", color: "#2ec45e" }}>
-                <span>✓</span>
-                Username contains uppercase — likely <strong>Available</strong> (Telegram usernames are case-insensitive)
-              </div>
-            )}
 
             <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "24px", textAlign: "center" }}>
               Press <kbd style={{ background: "var(--bg-secondary)", border: "1px solid var(--border-color)", borderRadius: "4px", padding: "1px 6px", fontSize: "11px", color: "var(--text-secondary)" }}>Enter</kbd> to check · 3–32 characters · letters, numbers, underscores
@@ -475,18 +459,16 @@ export default function HomePage() {
         {/* ── Alpha Sweep Mode ── */}
         {mode === "sweep" && (
           <div>
-            {/* Info banner */}
             <div style={{ background: "rgba(61,171,245,0.06)", border: "1px solid rgba(61,171,245,0.18)", borderRadius: "10px", padding: "12px 16px", marginBottom: "20px", fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-              <strong style={{ color: "var(--accent-blue)" }}>⚡ Alpha Sweep</strong> — checks the original username first, then all 26 letter variants (a–z) appended to it. Total: 27 checks.
+              <strong style={{ color: "var(--accent-blue)" }}>⚡ Alpha Sweep</strong> — checks the original username first, then all 26 letter variants (a–z). Total: 27 checks.
             </div>
 
-            {/* Input */}
             <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "14px", padding: "6px 6px 6px 20px", display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", boxShadow: "0 4px 24px rgba(0,0,0,0.2)" }}>
               <span style={{ color: "var(--text-muted)", fontSize: "18px", fontWeight: 500, userSelect: "none", flexShrink: 0 }}>@</span>
               <input type="text" value={sweepInput}
                 onChange={(e) => { setSweepInput(e.target.value); setError(null); setSweepResults([]); }}
                 onKeyDown={(e) => { if (e.key === "Enter") void checkSweep(); }}
-                placeholder="username" autoFocus
+                placeholder="baseusername" autoFocus
                 autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
                 style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--text-primary)", fontSize: "18px", fontWeight: 500 }}
               />
@@ -497,9 +479,8 @@ export default function HomePage() {
               </button>
             </div>
 
-            {/* Position toggle */}
-            <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
-              <span style={{ fontSize: "12px", color: "var(--text-muted)", alignSelf: "center" }}>Add letter:</span>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "20px", alignItems: "center" }}>
+              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Add letter:</span>
               {([
                 { key: "suffix", label: `john + a → johna` },
                 { key: "prefix", label: `a + john → ajohn` },
@@ -510,10 +491,9 @@ export default function HomePage() {
               ))}
             </div>
 
-            {/* Preview chips */}
             {sweepInput.trim() && (
               <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "20px" }}>
-                {[sweepInput.trim(), ...ALPHABET.slice(0, 5).map((l) => sweepPosition === "suffix" ? `${sweepInput.trim()}${l}` : `${l}${sweepInput.trim()}`)].map((u, i) => (
+                {[sweepInput.trim().toLowerCase(), ...ALPHABET.slice(0, 5).map((l) => sweepPosition === "suffix" ? `${sweepInput.trim().toLowerCase()}${l}` : `${l}${sweepInput.trim().toLowerCase()}`)].map((u, i) => (
                   <span key={i} style={{ background: "var(--bg-secondary)", border: "1px solid var(--border-color)", borderRadius: "5px", padding: "2px 8px", fontSize: "11px", color: i === 0 ? "var(--accent-blue)" : "var(--text-muted)", fontFamily: "monospace" }}>
                     {i === 0 ? "★ " : ""}{u}
                   </span>
@@ -526,7 +506,6 @@ export default function HomePage() {
 
             {sweepResults.length > 0 && (
               <div className="animate-fade-in">
-                {/* Highlight original */}
                 {sweepResults[0] && (
                   <div style={{ marginBottom: "16px" }}>
                     <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-blue)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px", padding: "0 4px" }}>★ Original Username</div>
@@ -535,7 +514,6 @@ export default function HomePage() {
                     </div>
                   </div>
                 )}
-                {/* Rest of sweep results */}
                 {sweepResults.length > 1 && (
                   <div>
                     <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px", padding: "0 4px" }}>Letter Variants (a–z)</div>

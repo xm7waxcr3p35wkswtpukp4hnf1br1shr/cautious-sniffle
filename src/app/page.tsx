@@ -445,8 +445,8 @@ export default function HomePage() {
                 <div style={{fontSize:12,fontWeight:600,color:"var(--text-secondary)",marginBottom:3}}>Alpha Sweep</div>
                 <div style={{fontSize:12,color:"var(--text-muted)",lineHeight:1.6}}>
                   Enter a base and we&apos;ll check all 26 variants with each letter appended.{" "}
-                  <code style={{color:"var(--text-secondary)",fontFamily:"monospace",fontSize:11}}>congress</code>{" → "}
-                  <code style={{color:"var(--text-secondary)",fontFamily:"monospace",fontSize:11}}>congressa … congressz</code>
+                  <code style={{color:"var(--text-secondary)",fontFamily:"monospace",fontSize:11}}>username</code>{" → "}
+                  <code style={{color:"var(--text-secondary)",fontFamily:"monospace",fontSize:11}}>usernamea … usernamez</code>
                 </div>
               </div>
             </div>
@@ -455,7 +455,7 @@ export default function HomePage() {
               value={sweepIn}
               onChange={v=>{setSweepIn(v);setSweepR([]);setErr(null);}}
               onEnter={()=>void startSweep()}
-              placeholder="base_username"
+              placeholder="username"
               disabled={sweepRun}
               suffix={sweepIn.trim()?"+ a…z":undefined}
               onAction={()=>void startSweep()} actionLabel="Sweep" actionLoading={false}

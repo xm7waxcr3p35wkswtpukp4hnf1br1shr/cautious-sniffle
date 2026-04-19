@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { usernameChecks } from "@/db/schema";
 
-const FRAGMENT_API_KEY = process.env.FRAGMENT_API_KEY ?? "9c5d52da-e56f-42dd-8043-e115c1cf1c04";
+const FRAGMENT_API_KEY = process.env.FRAGMENT_API_KEY;
 const FRAGMENT_API_BASE = "https://api.fragment-api.com";
 const FRAGMENT_BASE = "https://fragment.com/";
 
@@ -23,18 +23,34 @@ async function checkTelegramAvailability(
       description?: string;
     };
 
+    console.log(`[TG] @${username} →`, JSON.stringify(data));
+
     if (data.ok) return "taken";
 
-    if (data.error_code === 400) {
-      const desc = data.description?.toLowerCase() ?? "";
-      // "chat not found" = реально свободен в Telegram
-      if (desc.includes("chat not found")) return "free";
-      // "invalid username", "username is invalid" и т.п. = зарезервирован/заблокирован
+    const desc = (data.description ?? "").toLowerCase();
+
+    // Чат реально не найден = свободен
+    if (desc.includes("chat not found")) return "free";
+
+    // Все остальные ошибки = зарезервирован/заблокирован:
+    // "bad request: chat_id is invalid"
+    // "bad request: username invalid"
+    // "bad request: username not occupied"
+    // "forbidden: ..."
+    if (
+      desc.includes("invalid") ||
+      desc.includes("forbidden") ||
+      desc.includes("not occupied") ||
+      desc.includes("deactivated") ||
+      data.error_code === 400 ||
+      data.error_code === 403
+    ) {
       return "reserved";
     }
 
     return "free";
-  } catch {
+  } catch (e) {
+    console.error(`[TG] error for @${username}:`, e);
     return "free";
   }
 }
@@ -92,6 +108,8 @@ async function checkViaFragmentAPI(username: string): Promise<{
   hasPremium?: boolean | null;
   source: string;
 } | null> {
+  if (!FRAGMENT_API_KEY) return null;
+
   try {
     const res = await fetch(`${FRAGMENT_API_BASE}/v1/misc/user/${username}/`, {
       headers: {
@@ -145,9 +163,10 @@ async function checkOne(rawUsername: string): Promise<{
     result = { ...scraped, name: null, photo: null, hasPremium: null };
   }
 
-  // Если Fragment говорит "Available" — проверяем реально ли он свободен в Telegram
+  // Если Fragment говорит "Available" — проверяем реально ли свободен в Telegram
   if (result.status === "Available") {
     const tgStatus = await checkTelegramAvailability(username);
+    console.log(`[check] @${username}: Fragment=Available, TG=${tgStatus}`);
     if (tgStatus === "reserved") {
       result = { ...result, status: "Reserved" };
     }

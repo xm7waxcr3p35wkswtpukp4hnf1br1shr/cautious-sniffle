@@ -6,6 +6,39 @@ const FRAGMENT_API_KEY = process.env.FRAGMENT_API_KEY ?? "9c5d52da-e56f-42dd-804
 const FRAGMENT_API_BASE = "https://api.fragment-api.com";
 const FRAGMENT_BASE = "https://fragment.com/";
 
+async function checkTelegramAvailability(
+  username: string
+): Promise<"free" | "taken" | "reserved"> {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (!botToken) return "free";
+
+  try {
+    const res = await fetch(
+      `https://api.telegram.org/bot${botToken}/getChat?chat_id=@${username}`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    const data = (await res.json()) as {
+      ok: boolean;
+      error_code?: number;
+      description?: string;
+    };
+
+    if (data.ok) return "taken";
+
+    if (data.error_code === 400) {
+      const desc = data.description?.toLowerCase() ?? "";
+      // "chat not found" = реально свободен в Telegram
+      if (desc.includes("chat not found")) return "free";
+      // "invalid username", "username is invalid" и т.п. = зарезервирован/заблокирован
+      return "reserved";
+    }
+
+    return "free";
+  } catch {
+    return "free";
+  }
+}
+
 async function checkViaFragmentScrape(username: string): Promise<{
   status: string;
   source: string;
@@ -13,7 +46,8 @@ async function checkViaFragmentScrape(username: string): Promise<{
   try {
     const response = await fetch(FRAGMENT_BASE + "username/" + username, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246",
         "X-Aj-Referer": `${FRAGMENT_BASE}?query=${username}`,
         Accept: "application/json, text/javascript, */*; q=0.01",
         "Accept-Language": "en-US,en;q=0.5",
@@ -99,7 +133,6 @@ async function checkOne(rawUsername: string): Promise<{
   source: string;
   error?: boolean;
 }> {
-  // Always normalize to lowercase — Telegram usernames are case-insensitive
   const username = rawUsername.trim().replace(/^@/, "").toLowerCase();
 
   if (!username || !/^[a-z][a-z0-9_]{2,31}$/.test(username)) {
@@ -112,6 +145,14 @@ async function checkOne(rawUsername: string): Promise<{
     result = { ...scraped, name: null, photo: null, hasPremium: null };
   }
 
+  // Если Fragment говорит "Available" — проверяем реально ли он свободен в Telegram
+  if (result.status === "Available") {
+    const tgStatus = await checkTelegramAvailability(username);
+    if (tgStatus === "reserved") {
+      result = { ...result, status: "Reserved" };
+    }
+  }
+
   try {
     await db.insert(usernameChecks).values({
       username,
@@ -120,7 +161,9 @@ async function checkOne(rawUsername: string): Promise<{
       photo: result.photo ?? null,
       hasPremium: result.hasPremium != null ? String(result.hasPremium) : null,
     });
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   return {
     username,
@@ -144,7 +187,10 @@ export async function GET(req: NextRequest) {
 
   if (result.error) {
     return NextResponse.json(
-      { error: "Invalid username format. Must start with a letter, 3–32 characters, only letters/numbers/underscores." },
+      {
+        error:
+          "Invalid username format. Must start with a letter, 3–32 characters, only letters/numbers/underscores.",
+      },
       { status: 400 }
     );
   }
@@ -167,7 +213,9 @@ export async function POST(req: NextRequest) {
   const settled = await Promise.allSettled(usernames.map((raw) => checkOne(raw)));
 
   const data = settled.map((r) =>
-    r.status === "fulfilled" ? r.value : { username: "?", status: "Error", source: "", error: true }
+    r.status === "fulfilled"
+      ? r.value
+      : { username: "?", status: "Error", source: "", error: true }
   );
 
   return NextResponse.json({ results: data });

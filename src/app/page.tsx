@@ -210,6 +210,7 @@ export default function HomePage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [clearConfirm, setClearConfirm] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const fetchHistory = useCallback(async () => {
@@ -224,8 +225,20 @@ export default function HomePage() {
 
   useEffect(() => { void fetchHistory(); }, [fetchHistory]);
 
+  const clearHistory = useCallback(async () => {
+    if (!clearConfirm) {
+      setClearConfirm(true);
+      setTimeout(() => setClearConfirm(false), 3000);
+      return;
+    }
+    try {
+      await fetch("/api/history", { method: "DELETE" });
+      setHistory([]);
+      setClearConfirm(false);
+    } catch { /* ignore */ }
+  }, [clearConfirm]);
+
   const checkSingle = useCallback(async () => {
-    // Normalize to lowercase before sending
     const username = input.trim().replace(/^@/, "").toLowerCase();
     if (!username) return;
     setLoading(true); setError(null); setResult(null);
@@ -533,11 +546,20 @@ export default function HomePage() {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="var(--text-secondary)" strokeWidth="2" /><path d="M12 6v6l4 2" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" /></svg>
                 Recent Checks
               </h2>
-              <button onClick={() => void fetchHistory()}
-                style={{ background: "transparent", border: "1px solid var(--border-color)", borderRadius: "7px", padding: "4px 10px", color: "var(--text-muted)", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
-              >
-                {historyLoading ? <Spinner size={12} /> : "↻"} Refresh
-              </button>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button onClick={() => void fetchHistory()}
+                  style={{ background: "transparent", border: "1px solid var(--border-color)", borderRadius: "7px", padding: "4px 10px", color: "var(--text-muted)", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                >
+                  {historyLoading ? <Spinner size={12} /> : "↻"} Refresh
+                </button>
+                {history.length > 0 && (
+                  <button onClick={() => void clearHistory()}
+                    style={{ background: clearConfirm ? "rgba(224,82,82,0.15)" : "transparent", border: `1px solid ${clearConfirm ? "rgba(224,82,82,0.5)" : "rgba(224,82,82,0.3)"}`, borderRadius: "7px", padding: "4px 10px", color: "#e05252", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}
+                  >
+                    🗑 {clearConfirm ? "Sure?" : "Clear"}
+                  </button>
+                )}
+              </div>
             </div>
             {history.length === 0 ? (
               <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "32px", textAlign: "center", color: "var(--text-muted)", fontSize: "14px" }}>

@@ -198,19 +198,48 @@ function ResultRow({ r, isLast }: { r: CheckResult; isLast: boolean }) {
   );
 }
 
+// ── Alpha Sweep letter pill ──
+function LetterPill({ letter, status }: { letter: string; status: string | null }) {
+  if (!status) {
+    return (
+      <div style={{ width: "38px", height: "38px", borderRadius: "8px", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 700, color: "var(--text-muted)", position: "relative" }}>
+        {letter}
+      </div>
+    );
+  }
+  const cfg = getStatusConfig(status);
+  return (
+    <div
+      title={`@...${letter} — ${status}`}
+      style={{ width: "38px", height: "38px", borderRadius: "8px", background: cfg.bg, border: `1.5px solid ${cfg.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 700, color: cfg.color, position: "relative", cursor: "default", transition: "transform 0.1s" }}
+      onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.transform = "scale(1.1)")}
+      onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.transform = "scale(1)")}
+    >
+      {letter}
+    </div>
+  );
+}
+
 export default function HomePage() {
   const [input, setInput] = useState("");
   const [batchInput, setBatchInput] = useState("");
-  const [mode, setMode] = useState<"single" | "batch">("single");
+  const [sweepInput, setSweepInput] = useState("");
+  const [mode, setMode] = useState<"single" | "batch" | "sweep">("single");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
   const [batchResults, setBatchResults] = useState<CheckResult[]>([]);
+  const [sweepResults, setSweepResults] = useState<CheckResult[]>([]);
+  const [sweepProgress, setSweepProgress] = useState<number>(0); // 0-26
+  const [sweepRunning, setSweepRunning] = useState(false);
   const [sortMode, setSortMode] = useState<"none" | "az" | "za" | "group">("none");
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sweepAbortRef = useRef(false);
+
+  const ALPHABET = "abcdefghijklmnopqrstuvwxyz".split("");
 
   const sortedResults = (() => {
     if (sortMode === "az") return [...batchResults].sort((a, b) => a.username.localeCompare(b.username));
@@ -274,8 +303,57 @@ export default function HomePage() {
     finally { setLoading(false); }
   }, [batchInput, fetchHistory]);
 
+  // Alpha sweep: appends a–z one at a time, streaming results
+  const startAlphaSweep = useCallback(async () => {
+    const base = sweepInput.trim().replace(/^@/, "");
+    if (!base) return;
+    sweepAbortRef.current = false;
+    setSweepRunning(true);
+    setSweepResults([]);
+    setSweepProgress(0);
+    setError(null);
+
+    // Build 26 usernames
+    const usernames = ALPHABET.map((l) => base + l);
+
+    try {
+      const res = await fetch("/api/check-username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usernames }),
+      });
+      const data = (await res.json()) as { results?: CheckResult[]; error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong");
+      } else {
+        // Animate results streaming in one by one
+        const results = data.results ?? [];
+        for (let i = 0; i < results.length; i++) {
+          if (sweepAbortRef.current) break;
+          setSweepResults((prev) => [...prev, results[i]]);
+          setSweepProgress(i + 1);
+          await new Promise((r) => setTimeout(r, 60));
+        }
+        void fetchHistory();
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setSweepRunning(false);
+    }
+  }, [sweepInput, fetchHistory, ALPHABET]);
+
+  const stopSweep = () => {
+    sweepAbortRef.current = true;
+    setSweepRunning(false);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") void checkSingle();
+  };
+
+  const handleSweepKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") void startAlphaSweep();
   };
 
   const formatDate = (dateStr: string) => {
@@ -289,6 +367,12 @@ export default function HomePage() {
     { key: "za", label: "Z → A" },
     { key: "group", label: "By Status" },
   ];
+
+  // Sweep summary counts
+  const sweepCounts = sweepResults.reduce<Record<string, number>>((acc, r) => {
+    acc[r.status] = (acc[r.status] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-primary)", color: "var(--text-primary)" }}>
@@ -344,12 +428,12 @@ export default function HomePage() {
 
         {/* Mode Toggle */}
         <div style={{ display: "flex", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", borderRadius: "10px", padding: "4px", marginBottom: "24px" }}>
-          {(["single", "batch"] as const).map((m) => (
+          {(["single", "batch", "sweep"] as const).map((m) => (
             <button key={m}
-              onClick={() => { setMode(m); setResult(null); setBatchResults([]); setError(null); }}
-              style={{ flex: 1, padding: "8px", borderRadius: "7px", border: "none", background: mode === m ? "rgba(61,171,245,0.15)" : "transparent", color: mode === m ? "var(--accent-blue)" : "var(--text-secondary)", fontWeight: mode === m ? 600 : 400, fontSize: "14px", cursor: "pointer", transition: "all 0.15s", outline: mode === m ? "1px solid rgba(61,171,245,0.3)" : "none" }}
+              onClick={() => { setMode(m); setResult(null); setBatchResults([]); setSweepResults([]); setError(null); }}
+              style={{ flex: 1, padding: "8px", borderRadius: "7px", border: "none", background: mode === m ? "rgba(61,171,245,0.15)" : "transparent", color: mode === m ? "var(--accent-blue)" : "var(--text-secondary)", fontWeight: mode === m ? 600 : 400, fontSize: "13px", cursor: "pointer", transition: "all 0.15s", outline: mode === m ? "1px solid rgba(61,171,245,0.3)" : "none", whiteSpace: "nowrap" }}
             >
-              {m === "single" ? "Single Check" : "Batch Check (up to 100)"}
+              {m === "single" ? "Single Check" : m === "batch" ? "Batch (up to 100)" : "🔤 Alpha Sweep"}
             </button>
           ))}
         </div>
@@ -458,7 +542,6 @@ export default function HomePage() {
 
             {batchResults.length > 0 && (
               <div className="animate-fade-in">
-                {/* Summary cards */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px", marginBottom: "18px" }}>
                   {(["Available", "Taken", "For Sale", "Sold", "Unknown", "Invalid"] as const).map((s) => {
                     const count = batchResults.filter((r) => r.status === s).length;
@@ -473,7 +556,6 @@ export default function HomePage() {
                   })}
                 </div>
 
-                {/* Sort controls */}
                 <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px", gap: "6px", alignItems: "center" }}>
                   <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Sort:</span>
                   {sortButtons.map(({ key, label }) => (
@@ -485,7 +567,6 @@ export default function HomePage() {
                   ))}
                 </div>
 
-                {/* Results */}
                 {sortMode === "group" && groupedRows ? (
                   <div>
                     {groupedRows.map((group) => {
@@ -517,6 +598,126 @@ export default function HomePage() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Alpha Sweep Mode ── */}
+        {mode === "sweep" && (
+          <div>
+            {/* Info banner */}
+            <div style={{ background: "rgba(61,171,245,0.06)", border: "1px solid rgba(61,171,245,0.18)", borderRadius: "10px", padding: "12px 16px", marginBottom: "20px", display: "flex", gap: "10px", alignItems: "flex-start" }}>
+              <span style={{ fontSize: "18px", flexShrink: 0 }}>🔤</span>
+              <div>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--accent-blue)", marginBottom: "2px" }}>Alpha Sweep</div>
+                <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                  Enter a base username and we&apos;ll check all 26 variants with each letter of the alphabet appended.
+                  Example: <span style={{ fontFamily: "monospace", color: "var(--text-primary)" }}>username</span> →{" "}
+                  <span style={{ fontFamily: "monospace", color: "var(--accent-blue)" }}>usernamea, usernameb … usernamez</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Input */}
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "14px", padding: "6px 6px 6px 20px", display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", boxShadow: "0 4px 24px rgba(0,0,0,0.2)" }}>
+              <span style={{ color: "var(--text-muted)", fontSize: "18px", fontWeight: 500, userSelect: "none", flexShrink: 0 }}>@</span>
+              <input
+                type="text" value={sweepInput}
+                onChange={(e) => { setSweepInput(e.target.value); setSweepResults([]); setError(null); }}
+                onKeyDown={handleSweepKeyDown}
+                placeholder="base_username"
+                autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
+                disabled={sweepRunning}
+                style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--text-primary)", fontSize: "18px", fontWeight: 500, letterSpacing: "0.01em", opacity: sweepRunning ? 0.6 : 1 }}
+              />
+              {/* Preview suffix */}
+              {sweepInput.trim() && !sweepRunning && (
+                <span style={{ fontSize: "13px", color: "var(--text-muted)", fontFamily: "monospace", flexShrink: 0, paddingRight: "8px" }}>
+                  + a…z
+                </span>
+              )}
+              {sweepRunning ? (
+                <button onClick={stopSweep}
+                  style={{ background: "rgba(224,82,82,0.15)", color: "#e05252", border: "1px solid rgba(224,82,82,0.3)", borderRadius: "9px", padding: "10px 18px", fontSize: "14px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="2" y="2" width="8" height="8" rx="1" fill="#e05252" /></svg>
+                  Stop
+                </button>
+              ) : (
+                <button onClick={() => void startAlphaSweep()} disabled={!sweepInput.trim()}
+                  style={{ background: !sweepInput.trim() ? "rgba(61,171,245,0.1)" : "linear-gradient(135deg, #3dabf5 0%, #0098ea 100%)", color: "white", border: "none", borderRadius: "9px", padding: "10px 22px", fontSize: "14px", fontWeight: 600, cursor: !sweepInput.trim() ? "not-allowed" : "pointer", opacity: !sweepInput.trim() ? 0.5 : 1, display: "flex", alignItems: "center", gap: "8px", whiteSpace: "nowrap", flexShrink: 0 }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 3l14 9-14 9V3z" fill="white" /></svg>
+                  Sweep
+                </button>
+              )}
+            </div>
+
+            {error && (
+              <div className="animate-fade-in" style={{ background: "rgba(224,82,82,0.08)", border: "1px solid rgba(224,82,82,0.25)", borderRadius: "10px", padding: "14px 18px", color: "#e05252", fontSize: "14px", marginBottom: "20px" }}>
+                ⚠ {error}
+              </div>
+            )}
+
+            {/* Progress bar */}
+            {(sweepRunning || sweepResults.length > 0) && (
+              <div style={{ marginBottom: "20px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                    {sweepRunning ? `Checking… ${sweepProgress}/26` : `Complete — ${sweepProgress}/26 checked`}
+                  </span>
+                  <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                    {sweepInput.trim().replace(/^@/, "")}a…{sweepInput.trim().replace(/^@/, "")}z
+                  </span>
+                </div>
+                <div style={{ height: "4px", background: "var(--bg-secondary)", borderRadius: "2px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${(sweepProgress / 26) * 100}%`, background: "linear-gradient(90deg, #3dabf5, #2ec45e)", borderRadius: "2px", transition: "width 0.15s ease" }} />
+                </div>
+              </div>
+            )}
+
+            {/* Letter grid */}
+            {(sweepRunning || sweepResults.length > 0) && (
+              <div style={{ marginBottom: "24px" }}>
+                <div style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "10px", fontWeight: 500 }}>Overview</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {ALPHABET.map((letter, i) => {
+                    const res = sweepResults.find((r) => r.username.endsWith(letter) && r.username.slice(0, -1) === sweepInput.trim().replace(/^@/, ""));
+                    return (
+                      <LetterPill key={letter} letter={letter} status={i < sweepProgress ? (res?.status ?? "Unknown") : null} />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Summary counts */}
+            {sweepResults.length > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: "8px", marginBottom: "20px" }}>
+                {Object.entries(sweepCounts).map(([status, count]) => {
+                  const cfg = getStatusConfig(status);
+                  return (
+                    <div key={status} style={{ background: cfg.bg, border: `1px solid ${cfg.border}`, borderRadius: "10px", padding: "10px 12px", textAlign: "center" }}>
+                      <div style={{ fontSize: "22px", fontWeight: 700, color: cfg.color }}>{count}</div>
+                      <div style={{ fontSize: "11px", color: cfg.color, opacity: 0.8 }}>{cfg.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Full results list */}
+            {sweepResults.length > 0 && (
+              <div className="animate-fade-in">
+                <div style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "10px", fontWeight: 500 }}>
+                  All results
+                </div>
+                <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "12px", overflow: "hidden" }}>
+                  {sweepResults.map((r, i) => (
+                    <ResultRow key={r.username} r={r} isLast={i === sweepResults.length - 1} />
+                  ))}
+                </div>
               </div>
             )}
           </div>

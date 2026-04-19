@@ -237,8 +237,8 @@ export default function HomePage() {
       .filter(Boolean);
 
     if (lines.length === 0) return;
-    if (lines.length > 20) {
-      setError("Max 20 usernames per batch.");
+    if (lines.length > 1000) {
+      setError("Max 1000 usernames per batch.");
       return;
     }
 
@@ -531,7 +531,7 @@ export default function HomePage() {
                 outline: mode === m ? "1px solid rgba(61,171,245,0.3)" : "none",
               }}
             >
-              {m === "single" ? "Single Check" : "Batch Check (up to 20)"}
+              {m === "single" ? "Single Check" : "Batch Check (up to 1000)"}
             </button>
           ))}
         </div>
@@ -919,7 +919,7 @@ export default function HomePage() {
                       .map((s) => s.trim())
                       .filter(Boolean).length
                   }{" "}
-                  / 20
+                  / 1000
                 </span>
               </div>
               <textarea

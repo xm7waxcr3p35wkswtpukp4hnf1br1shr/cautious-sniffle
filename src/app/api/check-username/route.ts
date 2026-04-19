@@ -168,8 +168,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "usernames array is required" }, { status: 400 });
   }
 
-  if (usernames.length > 20) {
-    return NextResponse.json({ error: "Max 20 usernames per batch" }, { status: 400 });
+  if (usernames.length > 1000) {
+    return NextResponse.json({ error: "Max 1000 usernames per batch" }, { status: 400 });
   }
 
   const results = await Promise.allSettled(

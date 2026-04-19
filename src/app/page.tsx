@@ -223,9 +223,8 @@ function LetterPill({ letter, status }: { letter: string; status: string | null 
 export default function HomePage() {
   const [input, setInput] = useState("");
   const [batchInput, setBatchInput] = useState("");
-  const [mode, setMode] = useState<"single" | "batch">("single");
-  const [sweepInput, setSweepInput] = useState("");
   const [mode, setMode] = useState<"single" | "batch" | "sweep">("single");
+  const [sweepInput, setSweepInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
   const [batchResults, setBatchResults] = useState<CheckResult[]>([]);
@@ -429,15 +428,11 @@ export default function HomePage() {
 
         {/* Mode Toggle */}
         <div style={{ display: "flex", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", borderRadius: "10px", padding: "4px", marginBottom: "24px" }}>
-          {(["single", "batch"] as const).map((m) => (
           {(["single", "batch", "sweep"] as const).map((m) => (
             <button key={m}
-              onClick={() => { setMode(m); setResult(null); setBatchResults([]); setError(null); }}
-              style={{ flex: 1, padding: "8px", borderRadius: "7px", border: "none", background: mode === m ? "rgba(61,171,245,0.15)" : "transparent", color: mode === m ? "var(--accent-blue)" : "var(--text-secondary)", fontWeight: mode === m ? 600 : 400, fontSize: "14px", cursor: "pointer", transition: "all 0.15s", outline: mode === m ? "1px solid rgba(61,171,245,0.3)" : "none" }}
               onClick={() => { setMode(m); setResult(null); setBatchResults([]); setSweepResults([]); setError(null); }}
               style={{ flex: 1, padding: "8px", borderRadius: "7px", border: "none", background: mode === m ? "rgba(61,171,245,0.15)" : "transparent", color: mode === m ? "var(--accent-blue)" : "var(--text-secondary)", fontWeight: mode === m ? 600 : 400, fontSize: "13px", cursor: "pointer", transition: "all 0.15s", outline: mode === m ? "1px solid rgba(61,171,245,0.3)" : "none", whiteSpace: "nowrap" }}
             >
-              {m === "single" ? "Single Check" : "Batch Check (up to 100)"}
               {m === "single" ? "Single Check" : m === "batch" ? "Batch (up to 100)" : "🔤 Alpha Sweep"}
             </button>
           ))}

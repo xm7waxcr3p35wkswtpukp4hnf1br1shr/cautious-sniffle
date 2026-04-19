@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     "Check Telegram username availability on Fragment marketplace. Powered by Fragment API.",
   icons: {
     icon:
-      "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>",
+      "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>",
   },
 };
 

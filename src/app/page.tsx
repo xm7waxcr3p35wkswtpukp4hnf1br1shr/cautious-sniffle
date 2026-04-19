@@ -615,9 +615,9 @@ export default function HomePage() {
               <div>
                 <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--accent-blue)", marginBottom: "2px" }}>Alpha Sweep</div>
                 <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                  Enter a base username and we&apos;ll check all 26 variants with each letter of the alphabet appended.
+                  Enter a username and we&apos;ll check all 26 variants with each letter of the alphabet appended.
                   Example: <span style={{ fontFamily: "monospace", color: "var(--text-primary)" }}>username</span> →{" "}
-                  <span style={{ fontFamily: "monospace", color: "var(--accent-blue)" }}>usernamea, usernameb … usernamez</span>
+                  <span style={{ fontFamily: "monospace", color: "var(--accent-blue)" }}>username-a, username-b … username-z</span>
                 </div>
               </div>
             </div>
@@ -629,7 +629,7 @@ export default function HomePage() {
                 type="text" value={sweepInput}
                 onChange={(e) => { setSweepInput(e.target.value); setSweepResults([]); setError(null); }}
                 onKeyDown={handleSweepKeyDown}
-                placeholder="base_username"
+                placeholder="username"
                 autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
                 disabled={sweepRunning}
                 style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--text-primary)", fontSize: "18px", fontWeight: 500, letterSpacing: "0.01em", opacity: sweepRunning ? 0.6 : 1 }}

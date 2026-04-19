@@ -6,15 +6,6 @@ const FRAGMENT_API_KEY = process.env.FRAGMENT_API_KEY ?? "9c5d52da-e56f-42dd-804
 const FRAGMENT_API_BASE = "https://api.fragment-api.com";
 const FRAGMENT_BASE = "https://fragment.com/";
 
-/**
- * Case-based availability heuristic:
- * If the original input has any uppercase letter → Available (no API call needed).
- * Telegram usernames are always lowercase, so uppercase = the username doesn't exist as typed.
- */
-function hasCaseAvailability(rawUsername: string): boolean {
-  return /[A-Z]/.test(rawUsername);
-}
-
 async function checkViaFragmentScrape(username: string): Promise<{
   status: string;
   source: string;
@@ -87,11 +78,6 @@ async function checkViaFragmentAPI(username: string): Promise<{
       has_premium: boolean | null;
     };
 
-    // Case heuristic on API response: if returned username has uppercase → Available
-    if (/[A-Z]/.test(data.username ?? "")) {
-      return { status: "Available", name: null, photo: null, hasPremium: null, source: "fragment-api.com" };
-    }
-
     return {
       status: "Taken",
       name: data.name,
@@ -113,37 +99,22 @@ async function checkOne(rawUsername: string): Promise<{
   source: string;
   error?: boolean;
 }> {
-  const username = rawUsername.trim().replace(/^@/, "");
+  // Always normalize to lowercase — Telegram usernames are case-insensitive
+  const username = rawUsername.trim().replace(/^@/, "").toLowerCase();
 
-  if (!username || !/^[a-zA-Z][a-zA-Z0-9_]{2,31}$/.test(username)) {
+  if (!username || !/^[a-z][a-z0-9_]{2,31}$/.test(username)) {
     return { username: username || rawUsername, status: "Invalid", source: "", error: true };
   }
 
-  // Case-based shortcut: uppercase in input → Available immediately
-  if (hasCaseAvailability(username)) {
-    const normalized = username.toLowerCase();
-    try {
-      await db.insert(usernameChecks).values({
-        username: normalized,
-        status: "Available",
-        name: null,
-        photo: null,
-        hasPremium: null,
-      });
-    } catch { /* ignore */ }
-    return { username, status: "Available", name: null, photo: null, hasPremium: null, source: "case-check" };
-  }
-
-  // Normal API check (lowercase only)
-  let result = await checkViaFragmentAPI(username.toLowerCase());
+  let result = await checkViaFragmentAPI(username);
   if (!result) {
-    const scraped = await checkViaFragmentScrape(username.toLowerCase());
+    const scraped = await checkViaFragmentScrape(username);
     result = { ...scraped, name: null, photo: null, hasPremium: null };
   }
 
   try {
     await db.insert(usernameChecks).values({
-      username: username.toLowerCase(),
+      username,
       status: result.status,
       name: result.name ?? null,
       photo: result.photo ?? null,
@@ -189,8 +160,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "usernames array is required" }, { status: 400 });
   }
 
-  if (usernames.length > 100) {
-    return NextResponse.json({ error: "Max 100 usernames per batch" }, { status: 400 });
+  if (usernames.length > 200) {
+    return NextResponse.json({ error: "Max 200 usernames per batch" }, { status: 400 });
   }
 
   const settled = await Promise.allSettled(usernames.map((raw) => checkOne(raw)));

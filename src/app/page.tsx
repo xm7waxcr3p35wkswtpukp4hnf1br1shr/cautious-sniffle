@@ -22,466 +22,490 @@ type HistoryItem = {
   checkedAt: string;
 };
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; icon: string }> = {
-  Available: { label: "Available", color: "#2ec45e", bg: "rgba(46,196,94,0.08)", border: "rgba(46,196,94,0.25)", icon: "✓" },
-  Taken: { label: "Taken", color: "#e05252", bg: "rgba(224,82,82,0.08)", border: "rgba(224,82,82,0.25)", icon: "✕" },
-  "For Sale": { label: "For Sale / Auction", color: "#f5a623", bg: "rgba(245,166,35,0.08)", border: "rgba(245,166,35,0.25)", icon: "◆" },
-  Sold: { label: "Sold", color: "#7ea8c4", bg: "rgba(126,168,196,0.08)", border: "rgba(126,168,196,0.25)", icon: "●" },
-  Invalid: { label: "Invalid", color: "#e05252", bg: "rgba(224,82,82,0.08)", border: "rgba(224,82,82,0.25)", icon: "!" },
-  Unknown: { label: "Unknown", color: "#7ea8c4", bg: "rgba(126,168,196,0.08)", border: "rgba(126,168,196,0.25)", icon: "?" },
+const STATUS_CFG: Record<string, { label: string; color: string }> = {
+  Available:  { label: "Available", color: "#3a9a28" },
+  Taken:      { label: "Taken",     color: "#ec3425" },
+  "For Sale": { label: "For Sale",  color: "#ff9000" },
+  Sold:       { label: "Sold",      color: "#9b9b9b" },
+  Invalid:    { label: "Invalid",   color: "#ec3425" },
+  Unknown:    { label: "Unknown",   color: "#9b9b9b" },
 };
+const getS = (s: string) => STATUS_CFG[s] ?? { label: s, color: "#9b9b9b" };
+const STATUS_ORDER = ["Available", "For Sale", "Sold", "Taken", "Unknown", "Invalid"];
+const ALPHA = "abcdefghijklmnopqrstuvwxyz".split("");
 
-const STATUS_GROUP_ORDER = ["Available", "For Sale", "Sold", "Taken", "Unknown", "Invalid"];
-const ALPHABET = "abcdefghijklmnopqrstuvwxyz".split("");
-
-function getStatusConfig(status: string) {
-  return STATUS_CONFIG[status] ?? { label: status, color: "#7ea8c4", bg: "rgba(126,168,196,0.08)", border: "rgba(126,168,196,0.25)", icon: "?" };
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const cfg = getStatusConfig(status);
-  return (
-    <span style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`, borderRadius: "6px", padding: "2px 10px", fontSize: "12px", fontWeight: 600, letterSpacing: "0.03em", display: "inline-flex", alignItems: "center", gap: "4px", whiteSpace: "nowrap" }}>
-      <span style={{ fontSize: "10px" }}>{cfg.icon}</span>{cfg.label}
-    </span>
-  );
+/* ── helpers ── */
+function Badge({ status }: { status: string }) {
+  const c = getS(status);
+  return <span style={{ color: c.color, fontSize: "11px", fontWeight: 500, letterSpacing: "0.02em", whiteSpace: "nowrap" }}>{c.label}</span>;
 }
 
 function TonLogo() {
   return (
-    <svg width="16" height="16" viewBox="0 0 56 56" fill="none"><circle cx="28" cy="28" r="28" fill="#0098EA" /><path d="M38.82 17H17.18C13.64 17 11.43 20.85 13.2 23.9L26.37 46.59C27.14 47.93 29.07 47.93 29.83 46.59L43 23.9C44.57 20.85 42.36 17 38.82 17ZM25.4 35.46L19.68 25.3H25.4V35.46ZM25.4 23.3H18.03L25.4 19.5V23.3ZM30.6 35.46V25.3H36.32L30.6 35.46ZM30.6 23.3V19.5L37.97 23.3H30.6Z" fill="white" /></svg>
-  );
-}
-
-function Spinner({ size = 18 }: { size?: number }) {
-  return (
-    <svg className="animate-spin" width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="10" stroke="rgba(61,171,245,0.2)" strokeWidth="3" />
-      <path d="M12 2a10 10 0 0 1 10 10" stroke="#3dabf5" strokeWidth="3" strokeLinecap="round" />
+    <svg width="13" height="13" viewBox="0 0 56 56" fill="none" style={{ flexShrink: 0 }}>
+      <circle cx="28" cy="28" r="28" fill="#0098EA" />
+      <path d="M38.82 17H17.18C13.64 17 11.43 20.85 13.2 23.9L26.37 46.59C27.14 47.93 29.07 47.93 29.83 46.59L43 23.9C44.57 20.85 42.36 17 38.82 17ZM25.4 35.46L19.68 25.3H25.4V35.46ZM25.4 23.3H18.03L25.4 19.5V23.3ZM30.6 35.46V25.3H36.32L30.6 35.46ZM30.6 23.3V19.5L37.97 23.3H30.6Z" fill="white" />
     </svg>
   );
 }
 
-function PremiumStar() {
+function Spin({ sz = 13 }: { sz?: number }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" style={{ display: "inline-block", verticalAlign: "middle" }}>
+    <svg className="animate-spin" width={sz} height={sz} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="10" stroke="#e6e6e6" strokeWidth="2.5" />
+      <path d="M12 2a10 10 0 0 1 10 10" stroke="#0d0d0d" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function Star() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 20 20" fill="none" style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0 }}>
       <path d="M10 1l2.39 4.84 5.35.78-3.87 3.77.91 5.31L10 13.27l-4.78 2.51.91-5.31L2.26 6.62l5.35-.78L10 1z" fill="#FFD700" stroke="#e6be00" strokeWidth="0.5" />
     </svg>
   );
 }
 
-function ResultRow({ r, isLast }: { r: CheckResult; isLast: boolean }) {
+function Ava({ username, photo, sz = 26 }: { username: string; photo?: string | null; sz?: number }) {
+  if (photo) return <img src={photo} alt={username} style={{ width: sz, height: sz, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
   return (
-    <div
-      style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: isLast ? "none" : "1px solid var(--border-color)", gap: "12px", transition: "background 0.1s" }}
-      onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.02)")}
-      onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
+    <div style={{ width: sz, height: sz, borderRadius: "50%", background: "#f4f4f4", border: "0.5px solid #e6e6e6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(sz * 0.38) + "px", fontWeight: 500, color: "#9b9b9b", flexShrink: 0 }}>
+      {username[0]?.toUpperCase() ?? "?"}
+    </div>
+  );
+}
+
+const DLBDR = { borderBottom: "0.5px solid #e6e6e6" } as const;
+
+function Row({ r, last }: { r: CheckResult; last: boolean }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", padding: "9px 14px", ...(!last ? DLBDR : {}), gap: "10px", transition: "background 0.1s", cursor: "default" }}
+      onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.background = "#f4f4f4")}
+      onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
     >
-      {r.photo ? (
-        <img src={r.photo} alt={r.username} style={{ width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-      ) : (
-        <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "linear-gradient(135deg, #3dabf5 0%, #0052a3 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", fontWeight: 700, color: "white", flexShrink: 0 }}>
-          {r.username[0]?.toUpperCase() ?? "?"}
-        </div>
-      )}
+      <Ava username={r.username} photo={r.photo} sz={24} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>@{r.username}</span>
-          {r.hasPremium && <PremiumStar />}
+        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+          <span style={{ fontSize: "13px", fontWeight: 500, color: "#0d0d0d" }}>@{r.username}</span>
+          {r.hasPremium && <Star />}
         </div>
-        {r.name && <div style={{ fontSize: "12px", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</div>}
+        {r.name && <div style={{ fontSize: "11px", color: "#9b9b9b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</div>}
       </div>
-      <StatusBadge status={r.status} />
+      <Badge status={r.status} />
       {r.status !== "Invalid" && (
         <a href={`https://fragment.com/username/${r.username}`} target="_blank" rel="noopener noreferrer"
-          style={{ color: "var(--text-muted)", textDecoration: "none", display: "flex", alignItems: "center", flexShrink: 0, transition: "color 0.15s" }}
-          onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--accent-blue)")}
-          onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--text-muted)")}
+          style={{ color: "#cecece", textDecoration: "none", display: "flex", alignItems: "center", flexShrink: 0, transition: "color 0.1s" }}
+          onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.color = "#0d0d0d")}
+          onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.color = "#cecece")}
         >
-          <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
         </a>
       )}
     </div>
   );
 }
 
-function BatchResultsView({ results, sortMode, setSortMode }: {
-  results: CheckResult[];
-  sortMode: "none" | "az" | "za" | "group";
-  setSortMode: (m: "none" | "az" | "za" | "group") => void;
-}) {
-  const sortButtons: { key: "none" | "az" | "za" | "group"; label: string }[] = [
-    { key: "none", label: "Default" },
-    { key: "az", label: "A → Z" },
-    { key: "za", label: "Z → A" },
-    { key: "group", label: "By Status" },
-  ];
+type Sort = "none" | "az" | "za" | "group";
 
-  const sorted = (() => {
-    if (sortMode === "az") return [...results].sort((a, b) => a.username.localeCompare(b.username));
-    if (sortMode === "za") return [...results].sort((a, b) => b.username.localeCompare(a.username));
-    return results;
-  })();
+function Results({ results, sort, setSort }: { results: CheckResult[]; sort: Sort; setSort: (s: Sort) => void }) {
+  const sorted = sort === "az" ? [...results].sort((a, b) => a.username.localeCompare(b.username))
+    : sort === "za" ? [...results].sort((a, b) => b.username.localeCompare(a.username))
+    : results;
 
   const grouped = (() => {
-    if (sortMode !== "group") return null;
-    const groups: { status: string; items: CheckResult[] }[] = [];
-    for (const s of STATUS_GROUP_ORDER) {
-      const items = results.filter((r) => r.status === s).sort((a, b) => a.username.localeCompare(b.username));
-      if (items.length > 0) groups.push({ status: s, items });
+    if (sort !== "group") return null;
+    const g: { status: string; items: CheckResult[] }[] = [];
+    for (const s of STATUS_ORDER) {
+      const items = results.filter(r => r.status === s).sort((a, b) => a.username.localeCompare(b.username));
+      if (items.length) g.push({ status: s, items });
     }
-    const known = new Set(STATUS_GROUP_ORDER);
-    const extra = results.filter((r) => !known.has(r.status));
-    if (extra.length > 0) groups.push({ status: "Other", items: extra });
-    return groups;
+    const known = new Set(STATUS_ORDER);
+    const extra = results.filter(r => !known.has(r.status));
+    if (extra.length) g.push({ status: "Other", items: extra });
+    return g;
   })();
+
+  const counts = STATUS_ORDER.map(s => ({ s, n: results.filter(r => r.status === s).length })).filter(x => x.n > 0);
 
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: "10px", marginBottom: "18px" }}>
-        {(["Available", "Taken", "For Sale", "Sold", "Unknown", "Invalid"] as const).map((s) => {
-          const count = results.filter((r) => r.status === s).length;
-          if (count === 0) return null;
-          const cfg = getStatusConfig(s);
-          return (
-            <div key={s} style={{ background: cfg.bg, border: `1px solid ${cfg.border}`, borderRadius: "10px", padding: "12px 14px", textAlign: "center" }}>
-              <div style={{ fontSize: "24px", fontWeight: 700, color: cfg.color }}>{count}</div>
-              <div style={{ fontSize: "11px", color: cfg.color, opacity: 0.8 }}>{cfg.label}</div>
+      {counts.length > 0 && (
+        <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginBottom: "12px" }}>
+          {counts.map(({ s, n }) => (
+            <div key={s} style={{ padding: "4px 10px", background: "#f4f4f4", border: "0.5px solid #e6e6e6", borderRadius: "2px", display: "flex", gap: "8px", alignItems: "center" }}>
+              <span style={{ fontSize: "11px", color: getS(s).color, fontWeight: 500 }}>{getS(s).label}</span>
+              <span style={{ fontSize: "12px", fontWeight: 500, color: "#0d0d0d" }}>{n}</span>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px", gap: "6px", alignItems: "center" }}>
-        <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Sort:</span>
-        {sortButtons.map(({ key, label }) => (
-          <button key={key} onClick={() => setSortMode(key)}
-            style={{ background: sortMode === key ? "rgba(61,171,245,0.15)" : "transparent", border: `1px solid ${sortMode === key ? "rgba(61,171,245,0.3)" : "var(--border-color)"}`, borderRadius: "6px", padding: "4px 10px", color: sortMode === key ? "var(--accent-blue)" : "var(--text-secondary)", fontSize: "12px", fontWeight: sortMode === key ? 600 : 400, cursor: "pointer", transition: "all 0.15s" }}
-          >{label}</button>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: "3px", marginBottom: "8px", alignItems: "center" }}>
+        <span style={{ fontSize: "11px", color: "#9b9b9b", marginRight: "4px" }}>Sort</span>
+        {(["none", "az", "za", "group"] as Sort[]).map(k => (
+          <button key={k} onClick={() => setSort(k)} style={{
+            background: "transparent",
+            border: "0.5px solid " + (sort === k ? "#0d0d0d" : "#cecece"),
+            borderRadius: "2px", padding: "3px 8px",
+            color: sort === k ? "#0d0d0d" : "#9b9b9b",
+            fontSize: "11px", fontWeight: sort === k ? 500 : 400,
+            cursor: "pointer", fontFamily: "inherit", transition: "all 0.1s",
+          }}>{({ none: "Default", az: "A→Z", za: "Z→A", group: "Status" } as Record<Sort, string>)[k]}</button>
         ))}
       </div>
 
-      {sortMode === "group" && grouped ? (
-        <div>
-          {grouped.map((group) => {
-            const cfg = getStatusConfig(group.status);
-            return (
-              <div key={group.status} style={{ marginBottom: "16px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", padding: "0 4px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 700, color: cfg.color, textTransform: "uppercase", letterSpacing: "0.08em" }}>{cfg.icon} {cfg.label}</span>
-                  <span style={{ fontSize: "11px", color: "var(--text-muted)", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", borderRadius: "10px", padding: "1px 7px" }}>{group.items.length}</span>
-                  <div style={{ flex: 1, height: "1px", background: cfg.border }} />
-                </div>
-                <div style={{ background: "var(--bg-card)", border: `1px solid ${cfg.border}`, borderRadius: "12px", overflow: "hidden" }}>
-                  {group.items.map((r, i) => <ResultRow key={r.username + i} r={r} isLast={i === group.items.length - 1} />)}
-                </div>
+      {sort === "group" && grouped ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {grouped.map(g => (
+            <div key={g.status}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                <span style={{ fontSize: "10px", fontWeight: 500, color: getS(g.status).color, textTransform: "uppercase", letterSpacing: "0.08em" }}>{getS(g.status).label}</span>
+                <span style={{ fontSize: "10px", color: "#9b9b9b" }}>{g.items.length}</span>
+                <div style={{ flex: 1, height: "0.5px", background: "#e6e6e6" }} />
               </div>
-            );
-          })}
+              <div style={{ border: "0.5px solid #e6e6e6", borderRadius: "2px", overflow: "hidden" }}>
+                {g.items.map((r, i) => <Row key={r.username + i} r={r} last={i === g.items.length - 1} />)}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
-        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "12px", overflow: "hidden" }}>
-          {sorted.map((r, i) => <ResultRow key={i} r={r} isLast={i === sorted.length - 1} />)}
+        <div style={{ border: "0.5px solid #e6e6e6", borderRadius: "2px", overflow: "hidden" }}>
+          {sorted.map((r, i) => <Row key={i} r={r} last={i === sorted.length - 1} />)}
         </div>
       )}
     </div>
   );
 }
 
+/* ════════════════════════════════════
+   Page
+════════════════════════════════════ */
 export default function HomePage() {
-  const [input, setInput] = useState("");
+  const [input, setInput]           = useState("");
   const [batchInput, setBatchInput] = useState("");
   const [sweepInput, setSweepInput] = useState("");
-  const [sweepPosition, setSweepPosition] = useState<"suffix" | "prefix">("suffix");
-  const [mode, setMode] = useState<"single" | "batch" | "sweep" | "history">("single");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<CheckResult | null>(null);
-  const [batchResults, setBatchResults] = useState<CheckResult[]>([]);
-  const [sweepResults, setSweepResults] = useState<CheckResult[]>([]);
-  const [batchSortMode, setBatchSortMode] = useState<"none" | "az" | "za" | "group">("none");
-  const [sweepSortMode, setSweepSortMode] = useState<"none" | "az" | "za" | "group">("none");
-  const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [clearConfirm, setClearConfirm] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [sweepPos, setSweepPos]     = useState<"suffix" | "prefix">("suffix");
+  const [mode, setMode]             = useState<"single" | "batch" | "sweep" | "history">("single");
+  const [loading, setLoading]       = useState(false);
+  const [result, setResult]         = useState<CheckResult | null>(null);
+  const [batchRes, setBatchRes]     = useState<CheckResult[]>([]);
+  const [sweepRes, setSweepRes]     = useState<CheckResult[]>([]);
+  const [batchSort, setBatchSort]   = useState<Sort>("none");
+  const [sweepSort, setSweepSort]   = useState<Sort>("none");
+  const [error, setError]           = useState<string | null>(null);
+  const [history, setHistory]       = useState<HistoryItem[]>([]);
+  const [histLoad, setHistLoad]     = useState(false);
+  const [clearOk, setClearOk]       = useState(false);
+  const inputRef                    = useRef<HTMLInputElement>(null);
 
-  const fetchHistory = useCallback(async () => {
-    setHistoryLoading(true);
-    try {
-      const res = await fetch("/api/history");
-      const data = (await res.json()) as { history: HistoryItem[] };
-      setHistory(data.history ?? []);
-    } catch { /* ignore */ }
-    finally { setHistoryLoading(false); }
+  const loadHistory = useCallback(async () => {
+    setHistLoad(true);
+    try { const d = await (await fetch("/api/history")).json() as { history: HistoryItem[] }; setHistory(d.history ?? []); } catch { /**/ }
+    finally { setHistLoad(false); }
   }, []);
 
-  useEffect(() => { void fetchHistory(); }, [fetchHistory]);
+  useEffect(() => { void loadHistory(); }, [loadHistory]);
 
   const clearHistory = useCallback(async () => {
-    if (!clearConfirm) {
-      setClearConfirm(true);
-      setTimeout(() => setClearConfirm(false), 3000);
-      return;
-    }
-    try {
-      await fetch("/api/history", { method: "DELETE" });
-      setHistory([]);
-      setClearConfirm(false);
-    } catch { /* ignore */ }
-  }, [clearConfirm]);
+    if (!clearOk) { setClearOk(true); setTimeout(() => setClearOk(false), 3000); return; }
+    try { await fetch("/api/history", { method: "DELETE" }); setHistory([]); setClearOk(false); } catch { /**/ }
+  }, [clearOk]);
 
   const checkSingle = useCallback(async () => {
-    const username = input.trim().replace(/^@/, "").toLowerCase();
-    if (!username) return;
+    const u = input.trim().replace(/^@/, "").toLowerCase();
+    if (!u) return;
     setLoading(true); setError(null); setResult(null);
     try {
-      const res = await fetch(`/api/check-username?username=${encodeURIComponent(username)}`);
-      const data = (await res.json()) as CheckResult & { error?: string };
-      if (!res.ok) setError((data as { error?: string }).error ?? "Something went wrong");
-      else { setResult(data as CheckResult); void fetchHistory(); }
-    } catch { setError("Network error. Please try again."); }
+      const res = await fetch(`/api/check-username?username=${encodeURIComponent(u)}`);
+      const d = await res.json() as CheckResult & { error?: string };
+      if (!res.ok) setError(d.error ?? "Something went wrong");
+      else { setResult(d as CheckResult); void loadHistory(); }
+    } catch { setError("Network error."); }
     finally { setLoading(false); }
-  }, [input, fetchHistory]);
+  }, [input, loadHistory]);
 
   const checkBatch = useCallback(async () => {
-    const lines = batchInput
-      .split(/[\n,;]+/)
-      .map((s) => s.trim().replace(/^@/, "").toLowerCase())
-      .filter(Boolean);
-    if (lines.length === 0) return;
-    if (lines.length > 200) { setError("Max 200 usernames per batch."); return; }
-    setLoading(true); setError(null); setBatchResults([]); setBatchSortMode("none");
+    const lines = batchInput.split(/[\n,;]+/).map(s => s.trim().replace(/^@/, "").toLowerCase()).filter(Boolean);
+    if (!lines.length) return;
+    if (lines.length > 200) { setError("Max 200 usernames."); return; }
+    setLoading(true); setError(null); setBatchRes([]); setBatchSort("none");
     try {
-      const res = await fetch("/api/check-username", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ usernames: lines }),
-      });
-      const data = (await res.json()) as { results?: CheckResult[]; error?: string };
-      if (!res.ok) setError(data.error ?? "Something went wrong");
-      else { setBatchResults(data.results ?? []); void fetchHistory(); }
-    } catch { setError("Network error. Please try again."); }
+      const res = await fetch("/api/check-username", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ usernames: lines }) });
+      const d = await res.json() as { results?: CheckResult[]; error?: string };
+      if (!res.ok) setError(d.error ?? "Something went wrong");
+      else { setBatchRes(d.results ?? []); void loadHistory(); }
+    } catch { setError("Network error."); }
     finally { setLoading(false); }
-  }, [batchInput, fetchHistory]);
+  }, [batchInput, loadHistory]);
 
   const checkSweep = useCallback(async () => {
     const base = sweepInput.trim().replace(/^@/, "").toLowerCase();
     if (!base) return;
-    const candidates = [base, ...ALPHABET.map((l) => sweepPosition === "suffix" ? `${base}${l}` : `${l}${base}`)];
-    setLoading(true); setError(null); setSweepResults([]); setSweepSortMode("none");
+    const cands = [base, ...ALPHA.map(l => sweepPos === "suffix" ? `${base}${l}` : `${l}${base}`)];
+    setLoading(true); setError(null); setSweepRes([]); setSweepSort("none");
     try {
-      const res = await fetch("/api/check-username", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ usernames: candidates }),
-      });
-      const data = (await res.json()) as { results?: CheckResult[]; error?: string };
-      if (!res.ok) setError(data.error ?? "Something went wrong");
-      else { setSweepResults(data.results ?? []); void fetchHistory(); }
-    } catch { setError("Network error. Please try again."); }
+      const res = await fetch("/api/check-username", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ usernames: cands }) });
+      const d = await res.json() as { results?: CheckResult[]; error?: string };
+      if (!res.ok) setError(d.error ?? "Something went wrong");
+      else { setSweepRes(d.results ?? []); void loadHistory(); }
+    } catch { setError("Network error."); }
     finally { setLoading(false); }
-  }, [sweepInput, sweepPosition, fetchHistory]);
+  }, [sweepInput, sweepPos, loadHistory]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") void checkSingle();
+  const fmtDate = (s: string) => {
+    try { const d = new Date(s); return isNaN(d.getTime()) ? s : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return s; }
   };
 
-  const formatDate = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr;
-      return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-    } catch { return dateStr; }
+  /* style helpers */
+  const primaryBtn = (dis: boolean): React.CSSProperties => ({
+    background: dis ? "#e6e6e6" : "#0d0d0d",
+    color: dis ? "#9b9b9b" : "#fff",
+    border: "none", borderRadius: "2px", padding: "8px 16px",
+    fontSize: "13px", fontWeight: 500, cursor: dis ? "not-allowed" : "pointer",
+    display: "flex", alignItems: "center", gap: "6px",
+    whiteSpace: "nowrap" as const, flexShrink: 0, fontFamily: "inherit", transition: "background 0.1s",
+  });
+  const ghostBtn: React.CSSProperties = {
+    background: "transparent", border: "0.5px solid #cecece", borderRadius: "2px",
+    padding: "5px 10px", color: "#787878", fontSize: "12px", cursor: "pointer",
+    display: "flex", alignItems: "center", gap: "4px", fontFamily: "inherit", transition: "all 0.1s",
   };
+  const inputWrap: React.CSSProperties = {
+    display: "flex", alignItems: "center", border: "0.5px solid #cecece",
+    borderRadius: "2px", overflow: "hidden",
+  };
+  const textInput: React.CSSProperties = {
+    flex: 1, background: "transparent", border: "none", outline: "none",
+    color: "#0d0d0d", fontSize: "14px", padding: "10px 6px", fontFamily: "inherit",
+  };
+
+  const tabs = [
+    { key: "single"  as const, label: "Single",  icon: null },
+    { key: "batch"   as const, label: "Batch",   icon: null },
+    { key: "sweep"   as const, label: "Sweep",
+      icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> },
+    { key: "history" as const, label: "History",
+      icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" /><path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> },
+  ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-primary)", color: "var(--text-primary)" }}>
-      <main style={{ maxWidth: "720px", margin: "0 auto", padding: "48px 24px 80px" }}>
+    <div style={{ minHeight: "100vh", background: "#fff", color: "#0d0d0d" }}>
 
-        {/* Mode Toggle */}
-        <div style={{ display: "flex", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", borderRadius: "10px", padding: "4px", marginBottom: "24px" }}>
-          {([
-            { key: "single", label: "Single" },
-            { key: "batch", label: "Batch" },
-            { key: "sweep", label: "⚡ Sweep" },
-            { key: "history", label: "🕐 History" },
-          ] as const).map(({ key, label }) => (
+      {/* header */}
+      <header style={{ borderBottom: "0.5px solid #e6e6e6", padding: "0 24px", height: "46px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, background: "rgba(255,255,255,0.96)", backdropFilter: "blur(6px)", zIndex: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+          <TonLogo />
+          <span style={{ fontSize: "13px", fontWeight: 500, letterSpacing: "0.01em" }}>Fragment Username</span>
+        </div>
+        <a href="https://fragment.com" target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: "12px", color: "#9b9b9b", textDecoration: "none", display: "flex", alignItems: "center", gap: "3px", transition: "color 0.1s" }}
+          onMouseEnter={e => (e.currentTarget.style.color = "#0d0d0d")}
+          onMouseLeave={e => (e.currentTarget.style.color = "#9b9b9b")}
+        >
+          fragment.com
+          <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+        </a>
+      </header>
+
+      <main style={{ maxWidth: "620px", margin: "0 auto", padding: "40px 24px 80px" }}>
+
+        {/* title */}
+        <div style={{ marginBottom: "32px" }}>
+          <h1 style={{ fontSize: "21px", fontWeight: 500, margin: "0 0 5px", letterSpacing: "-0.01em" }}>Username Checker</h1>
+          <p style={{ fontSize: "13px", color: "#9b9b9b", margin: 0 }}>Check Telegram username availability on Fragment marketplace.</p>
+        </div>
+
+        {/* tabs */}
+        <div style={{ display: "flex", borderBottom: "0.5px solid #e6e6e6", marginBottom: "24px" }}>
+          {tabs.map(({ key, label, icon }) => (
             <button key={key}
-              onClick={() => {
-                setMode(key);
-                setResult(null); setBatchResults([]); setSweepResults([]); setError(null);
-                if (key === "history") void fetchHistory();
+              onClick={() => { setMode(key); setResult(null); setBatchRes([]); setSweepRes([]); setError(null); if (key === "history") void loadHistory(); }}
+              style={{
+                padding: "9px 14px", border: "none",
+                borderBottom: mode === key ? "1.5px solid #0d0d0d" : "1.5px solid transparent",
+                background: "transparent",
+                color: mode === key ? "#0d0d0d" : "#9b9b9b",
+                fontWeight: mode === key ? 500 : 400, fontSize: "13px", cursor: "pointer",
+                display: "flex", alignItems: "center", gap: "5px",
+                marginBottom: "-0.5px", fontFamily: "inherit", transition: "color 0.1s",
               }}
-              style={{ flex: 1, padding: "8px", borderRadius: "7px", border: "none", background: mode === key ? "rgba(61,171,245,0.15)" : "transparent", color: mode === key ? "var(--accent-blue)" : "var(--text-secondary)", fontWeight: mode === key ? 600 : 400, fontSize: "13px", cursor: "pointer", transition: "all 0.15s", outline: mode === key ? "1px solid rgba(61,171,245,0.3)" : "none" }}
-            >{label}</button>
+            >{icon}{label}</button>
           ))}
         </div>
 
-        {/* ── Single Mode ── */}
+        {/* ── single ── */}
         {mode === "single" && (
           <div>
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "14px", padding: "6px 6px 6px 20px", display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px", boxShadow: "0 4px 24px rgba(0,0,0,0.2)" }}>
-              <span style={{ color: "var(--text-muted)", fontSize: "18px", fontWeight: 500, userSelect: "none", flexShrink: 0 }}>@</span>
+            <div style={{ ...inputWrap, marginBottom: "8px" }}
+              onFocusCapture={e => (e.currentTarget.style.borderColor = "#0d0d0d")}
+              onBlurCapture={e => (e.currentTarget.style.borderColor = "#cecece")}
+            >
+              <span style={{ padding: "0 0 0 14px", color: "#cecece", fontSize: "15px", userSelect: "none", flexShrink: 0 }}>@</span>
               <input ref={inputRef} type="text" value={input}
-                onChange={(e) => { setInput(e.target.value); setResult(null); setError(null); }}
-                onKeyDown={handleKeyDown} placeholder="username" autoFocus
+                onChange={e => { setInput(e.target.value); setResult(null); setError(null); }}
+                onKeyDown={e => { if (e.key === "Enter") void checkSingle(); }}
+                placeholder="username" autoFocus
                 autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
-                style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--text-primary)", fontSize: "18px", fontWeight: 500, letterSpacing: "0.01em" }}
+                style={textInput}
               />
               <button onClick={() => void checkSingle()} disabled={loading || !input.trim()}
-                style={{ background: loading ? "rgba(61,171,245,0.15)" : "linear-gradient(135deg, #3dabf5 0%, #0098ea 100%)", color: "white", border: "none", borderRadius: "9px", padding: "10px 22px", fontSize: "14px", fontWeight: 600, cursor: loading || !input.trim() ? "not-allowed" : "pointer", opacity: !input.trim() ? 0.5 : 1, display: "flex", alignItems: "center", gap: "8px", whiteSpace: "nowrap", flexShrink: 0 }}
+                style={primaryBtn(loading || !input.trim())}
+                onMouseEnter={e => { if (!loading && input.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#2d2d2d"; }}
+                onMouseLeave={e => { if (!loading && input.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#0d0d0d"; }}
               >
-                {loading ? (<><Spinner />Checking...</>) : (<><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="white" strokeWidth="2" /><path d="M21 21l-4.35-4.35" stroke="white" strokeWidth="2" strokeLinecap="round" /></svg>Check</>)}
+                {loading ? <Spin /> : <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" /><path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>}
+                {loading ? "Checking" : "Check"}
               </button>
             </div>
-
-            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "24px", textAlign: "center" }}>
-              Press <kbd style={{ background: "var(--bg-secondary)", border: "1px solid var(--border-color)", borderRadius: "4px", padding: "1px 6px", fontSize: "11px", color: "var(--text-secondary)" }}>Enter</kbd> to check · 3–32 characters · letters, numbers, underscores
-            </p>
+            <p style={{ fontSize: "11px", color: "#9b9b9b", marginBottom: "24px" }}>Enter · 3–32 chars · letters, numbers, underscores</p>
 
             {error && (
-              <div className="animate-fade-in" style={{ background: "rgba(224,82,82,0.08)", border: "1px solid rgba(224,82,82,0.25)", borderRadius: "10px", padding: "14px 18px", color: "#e05252", fontSize: "14px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
-                <span>⚠</span>{error}
+              <div className="animate-fade-in" style={{ padding: "10px 14px", border: "0.5px solid #ec3425", borderRadius: "2px", color: "#ec3425", fontSize: "13px", marginBottom: "16px", display: "flex", gap: "8px" }}>
+                <span>—</span>{error}
               </div>
             )}
 
             {result && !error && (
-              <div className="animate-fade-in" style={{ background: "var(--bg-card)", border: `1px solid ${getStatusConfig(result.status).border}`, borderRadius: "14px", padding: "24px", boxShadow: `0 4px 32px ${getStatusConfig(result.status).bg}` }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
-                  {result.photo ? (
-                    <img src={result.photo} alt={result.username} style={{ width: "56px", height: "56px", borderRadius: "50%", objectFit: "cover", border: "2px solid var(--border-color)", flexShrink: 0 }} />
-                  ) : (
-                    <div style={{ width: "56px", height: "56px", borderRadius: "50%", background: "linear-gradient(135deg, #3dabf5 0%, #0052a3 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", fontWeight: 700, color: "white", flexShrink: 0, border: "2px solid var(--border-color)" }}>
-                      {result.username[0]?.toUpperCase()}
+              <div className="animate-fade-in" style={{ border: "0.5px solid #e6e6e6", borderRadius: "2px", overflow: "hidden" }}>
+                <div style={{ padding: "8px 14px", background: "#f4f4f4", borderBottom: "0.5px solid #e6e6e6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: "11px", color: "#9b9b9b", fontFamily: "'Courier New', monospace" }}>fragment.com/username/{result.username}</span>
+                  <Badge status={result.status} />
+                </div>
+                <div style={{ padding: "14px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                    <Ava username={result.username} photo={result.photo} sz={38} />
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                        <span style={{ fontSize: "15px", fontWeight: 500 }}>@{result.username}</span>
+                        {result.hasPremium && <Star />}
+                      </div>
+                      {result.name && <div style={{ fontSize: "12px", color: "#9b9b9b", marginTop: "1px" }}>{result.name}</div>}
                     </div>
-                  )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
-                      <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>@{result.username}</span>
-                      {result.hasPremium && <PremiumStar />}
-                      <StatusBadge status={result.status} />
-                    </div>
-                    {result.name && <div style={{ fontSize: "14px", color: "var(--text-secondary)", marginBottom: "4px" }}>{result.name}</div>}
-                    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "12px", flexWrap: "wrap" }}>
-                      <a href={`https://fragment.com/username/${result.username}`} target="_blank" rel="noopener noreferrer"
-                        style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: "rgba(61,171,245,0.1)", border: "1px solid rgba(61,171,245,0.25)", borderRadius: "7px", padding: "6px 12px", color: "var(--accent-blue)", textDecoration: "none", fontSize: "13px", fontWeight: 500 }}
-                        onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.background = "rgba(61,171,245,0.18)")}
-                        onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.background = "rgba(61,171,245,0.1)")}
-                      >
-                        <TonLogo />View on Fragment
-                        <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-                      </a>
-                      <a href={`https://t.me/${result.username}`} target="_blank" rel="noopener noreferrer"
-                        style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: "rgba(0,152,234,0.08)", border: "1px solid rgba(0,152,234,0.2)", borderRadius: "7px", padding: "6px 12px", color: "#0098ea", textDecoration: "none", fontSize: "13px", fontWeight: 500 }}
-                        onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.background = "rgba(0,152,234,0.14)")}
-                        onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.background = "rgba(0,152,234,0.08)")}
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="#0098ea"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.96 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" /></svg>
-                        Open in Telegram
-                      </a>
-                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
+                    {[
+                      { href: `https://fragment.com/username/${result.username}`, label: "View on Fragment", icon: <TonLogo /> },
+                      { href: `https://t.me/${result.username}`, label: "Open in Telegram", icon: null },
+                    ].map(({ href, label, icon }) => (
+                      <a key={href} href={href} target="_blank" rel="noopener noreferrer"
+                        style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "5px 10px", border: "0.5px solid #cecece", borderRadius: "2px", color: "#0d0d0d", textDecoration: "none", fontSize: "12px", transition: "background 0.1s" }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "#f4f4f4")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                      >{icon}{label}</a>
+                    ))}
                   </div>
                 </div>
                 {result.source && (
-                  <div style={{ marginTop: "16px", paddingTop: "14px", borderTop: "1px solid var(--border-color)", fontSize: "11px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" /><path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-                    Data source: {result.source}
-                  </div>
+                  <div style={{ padding: "5px 14px", borderTop: "0.5px solid #e6e6e6", background: "#f4f4f4", fontSize: "10px", color: "#9b9b9b" }}>Source: {result.source}</div>
                 )}
               </div>
             )}
           </div>
         )}
 
-        {/* ── Batch Mode ── */}
+        {/* ── batch ── */}
         {mode === "batch" && (
           <div>
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "14px", overflow: "hidden", marginBottom: "16px", boxShadow: "0 4px 24px rgba(0,0,0,0.2)" }}>
-              <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 500 }}>Enter usernames (one per line, comma or semicolon separated)</span>
-                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  {batchInput.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).length} / 200
+            <div style={{ border: "0.5px solid #cecece", borderRadius: "2px", overflow: "hidden", marginBottom: "10px" }}>
+              <div style={{ padding: "7px 12px", background: "#f4f4f4", borderBottom: "0.5px solid #e6e6e6", display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "11px", color: "#9b9b9b" }}>One per line · comma or semicolon separated</span>
+                <span style={{ fontSize: "11px", color: "#9b9b9b", fontFamily: "'Courier New', monospace" }}>
+                  {batchInput.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).length}/200
                 </span>
               </div>
               <textarea value={batchInput}
-                onChange={(e) => { setBatchInput(e.target.value); setError(null); setBatchResults([]); }}
+                onChange={e => { setBatchInput(e.target.value); setError(null); setBatchRes([]); }}
                 placeholder={"username1\nusername2\nusername3"} rows={8}
-                style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: "var(--text-primary)", fontSize: "14px", fontFamily: "monospace", padding: "16px", resize: "vertical", lineHeight: 1.7 }}
+                style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: "#0d0d0d", fontSize: "13px", fontFamily: "'Courier New', monospace", padding: "10px 12px", resize: "vertical", lineHeight: 1.6 }}
               />
             </div>
             <button onClick={() => void checkBatch()} disabled={loading || !batchInput.trim()}
-              style={{ width: "100%", background: loading ? "rgba(61,171,245,0.1)" : "linear-gradient(135deg, #3dabf5 0%, #0098ea 100%)", color: "white", border: "none", borderRadius: "10px", padding: "13px", fontSize: "15px", fontWeight: 600, cursor: loading || !batchInput.trim() ? "not-allowed" : "pointer", opacity: !batchInput.trim() ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginBottom: "24px" }}
+              style={{ ...primaryBtn(loading || !batchInput.trim()), width: "100%", justifyContent: "center", marginBottom: "18px" }}
+              onMouseEnter={e => { if (!loading && batchInput.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#2d2d2d"; }}
+              onMouseLeave={e => { if (!loading && batchInput.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#0d0d0d"; }}
             >
-              {loading ? (<><Spinner /> Checking...</>) : (<><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="white" strokeWidth="2" /><path d="M21 21l-4.35-4.35" stroke="white" strokeWidth="2" strokeLinecap="round" /></svg>Check All</>)}
+              {loading ? <><Spin />Checking</> : "Check all"}
             </button>
-            {error && <div className="animate-fade-in" style={{ background: "rgba(224,82,82,0.08)", border: "1px solid rgba(224,82,82,0.25)", borderRadius: "10px", padding: "14px 18px", color: "#e05252", fontSize: "14px", marginBottom: "20px" }}>⚠ {error}</div>}
-            {batchResults.length > 0 && <BatchResultsView results={batchResults} sortMode={batchSortMode} setSortMode={setBatchSortMode} />}
+            {error && <div style={{ padding: "10px 14px", border: "0.5px solid #ec3425", borderRadius: "2px", color: "#ec3425", fontSize: "13px", marginBottom: "14px" }}>— {error}</div>}
+            {batchRes.length > 0 && <Results results={batchRes} sort={batchSort} setSort={setBatchSort} />}
           </div>
         )}
 
-        {/* ── Alpha Sweep Mode ── */}
+        {/* ── sweep ── */}
         {mode === "sweep" && (
           <div>
-            <div style={{ background: "rgba(61,171,245,0.06)", border: "1px solid rgba(61,171,245,0.18)", borderRadius: "10px", padding: "12px 16px", marginBottom: "20px", fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-              <strong style={{ color: "var(--accent-blue)" }}>⚡ Alpha Sweep</strong> — checks the original username first, then all 26 letter variants (a–z). Total: 27 checks.
+            <div style={{ padding: "9px 12px", background: "#f4f4f4", border: "0.5px solid #e6e6e6", borderRadius: "2px", fontSize: "12px", color: "#787878", marginBottom: "18px", lineHeight: 1.6 }}>
+              Checks the original username + all 26 letter variants (a–z). Total: 27 requests.
             </div>
-
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "14px", padding: "6px 6px 6px 20px", display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", boxShadow: "0 4px 24px rgba(0,0,0,0.2)" }}>
-              <span style={{ color: "var(--text-muted)", fontSize: "18px", fontWeight: 500, userSelect: "none", flexShrink: 0 }}>@</span>
+            <div style={{ ...inputWrap, marginBottom: "10px" }}
+              onFocusCapture={e => (e.currentTarget.style.borderColor = "#0d0d0d")}
+              onBlurCapture={e => (e.currentTarget.style.borderColor = "#cecece")}
+            >
+              <span style={{ padding: "0 0 0 14px", color: "#cecece", fontSize: "15px", flexShrink: 0 }}>@</span>
               <input type="text" value={sweepInput}
-                onChange={(e) => { setSweepInput(e.target.value); setError(null); setSweepResults([]); }}
-                onKeyDown={(e) => { if (e.key === "Enter") void checkSweep(); }}
+                onChange={e => { setSweepInput(e.target.value); setError(null); setSweepRes([]); }}
+                onKeyDown={e => { if (e.key === "Enter") void checkSweep(); }}
                 placeholder="baseusername" autoFocus
                 autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
-                style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--text-primary)", fontSize: "18px", fontWeight: 500 }}
+                style={textInput}
               />
               <button onClick={() => void checkSweep()} disabled={loading || !sweepInput.trim()}
-                style={{ background: loading ? "rgba(61,171,245,0.15)" : "linear-gradient(135deg, #3dabf5 0%, #0098ea 100%)", color: "white", border: "none", borderRadius: "9px", padding: "10px 22px", fontSize: "14px", fontWeight: 600, cursor: loading || !sweepInput.trim() ? "not-allowed" : "pointer", opacity: !sweepInput.trim() ? 0.5 : 1, display: "flex", alignItems: "center", gap: "8px", whiteSpace: "nowrap", flexShrink: 0 }}
+                style={primaryBtn(loading || !sweepInput.trim())}
+                onMouseEnter={e => { if (!loading && sweepInput.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#2d2d2d"; }}
+                onMouseLeave={e => { if (!loading && sweepInput.trim()) (e.currentTarget as HTMLButtonElement).style.background = "#0d0d0d"; }}
               >
-                {loading ? (<><Spinner />Sweeping...</>) : (<>⚡ Sweep</>)}
+                {loading ? <><Spin />Sweeping</> : "Sweep"}
               </button>
             </div>
 
-            <div style={{ display: "flex", gap: "8px", marginBottom: "20px", alignItems: "center" }}>
-              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Add letter:</span>
-              {([
-                { key: "suffix", label: `john + a → johna` },
-                { key: "prefix", label: `a + john → ajohn` },
-              ] as const).map(({ key, label }) => (
-                <button key={key} onClick={() => setSweepPosition(key)}
-                  style={{ background: sweepPosition === key ? "rgba(61,171,245,0.15)" : "transparent", border: `1px solid ${sweepPosition === key ? "rgba(61,171,245,0.3)" : "var(--border-color)"}`, borderRadius: "6px", padding: "5px 12px", color: sweepPosition === key ? "var(--accent-blue)" : "var(--text-secondary)", fontSize: "12px", fontWeight: sweepPosition === key ? 600 : 400, cursor: "pointer", fontFamily: "monospace" }}
-                >{label}</button>
+            <div style={{ display: "flex", gap: "4px", alignItems: "center", marginBottom: "16px" }}>
+              <span style={{ fontSize: "11px", color: "#9b9b9b", marginRight: "4px" }}>Append</span>
+              {(["suffix", "prefix"] as const).map(k => (
+                <button key={k} onClick={() => setSweepPos(k)} style={{
+                  background: "transparent",
+                  border: "0.5px solid " + (sweepPos === k ? "#0d0d0d" : "#cecece"),
+                  borderRadius: "2px", padding: "3px 10px",
+                  color: sweepPos === k ? "#0d0d0d" : "#9b9b9b",
+                  fontSize: "11px", fontWeight: sweepPos === k ? 500 : 400,
+                  cursor: "pointer", fontFamily: "'Courier New', monospace", transition: "all 0.1s",
+                }}>
+                  {k === "suffix" ? "john+a" : "a+john"}
+                </button>
               ))}
             </div>
 
             {sweepInput.trim() && (
-              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "20px" }}>
-                {[sweepInput.trim().toLowerCase(), ...ALPHABET.slice(0, 5).map((l) => sweepPosition === "suffix" ? `${sweepInput.trim().toLowerCase()}${l}` : `${l}${sweepInput.trim().toLowerCase()}`)].map((u, i) => (
-                  <span key={i} style={{ background: "var(--bg-secondary)", border: "1px solid var(--border-color)", borderRadius: "5px", padding: "2px 8px", fontSize: "11px", color: i === 0 ? "var(--accent-blue)" : "var(--text-muted)", fontFamily: "monospace" }}>
-                    {i === 0 ? "★ " : ""}{u}
-                  </span>
+              <div style={{ display: "flex", gap: "3px", flexWrap: "wrap", marginBottom: "18px" }}>
+                {[sweepInput.trim().toLowerCase(), ...ALPHA.slice(0, 6).map(l => sweepPos === "suffix" ? `${sweepInput.trim().toLowerCase()}${l}` : `${l}${sweepInput.trim().toLowerCase()}`)].map((u, i) => (
+                  <span key={i} style={{
+                    background: i === 0 ? "#0d0d0d" : "#f4f4f4",
+                    border: "0.5px solid " + (i === 0 ? "#0d0d0d" : "#e6e6e6"),
+                    borderRadius: "2px", padding: "2px 7px", fontSize: "11px",
+                    color: i === 0 ? "#fff" : "#787878",
+                    fontFamily: "'Courier New', monospace",
+                  }}>{u}</span>
                 ))}
-                <span style={{ fontSize: "11px", color: "var(--text-muted)", alignSelf: "center" }}>...+{26 - 5} more</span>
+                <span style={{ fontSize: "11px", color: "#9b9b9b", alignSelf: "center" }}>+{26 - 6} more</span>
               </div>
             )}
 
-            {error && <div className="animate-fade-in" style={{ background: "rgba(224,82,82,0.08)", border: "1px solid rgba(224,82,82,0.25)", borderRadius: "10px", padding: "14px 18px", color: "#e05252", fontSize: "14px", marginBottom: "20px" }}>⚠ {error}</div>}
+            {error && <div style={{ padding: "10px 14px", border: "0.5px solid #ec3425", borderRadius: "2px", color: "#ec3425", fontSize: "13px", marginBottom: "14px" }}>— {error}</div>}
 
-            {sweepResults.length > 0 && (
+            {sweepRes.length > 0 && (
               <div className="animate-fade-in">
-                {sweepResults[0] && (
-                  <div style={{ marginBottom: "16px" }}>
-                    <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-blue)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px", padding: "0 4px" }}>★ Original Username</div>
-                    <div style={{ background: "var(--bg-card)", border: "1px solid rgba(61,171,245,0.3)", borderRadius: "12px", overflow: "hidden" }}>
-                      <ResultRow r={sweepResults[0]} isLast={true} />
+                {sweepRes[0] && (
+                  <div style={{ marginBottom: "14px" }}>
+                    <div style={{ fontSize: "10px", fontWeight: 500, color: "#9b9b9b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "5px" }}>Original</div>
+                    <div style={{ border: "0.5px solid #0d0d0d", borderRadius: "2px", overflow: "hidden" }}>
+                      <Row r={sweepRes[0]} last={true} />
                     </div>
                   </div>
                 )}
-                {sweepResults.length > 1 && (
+                {sweepRes.length > 1 && (
                   <div>
-                    <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px", padding: "0 4px" }}>Letter Variants (a–z)</div>
-                    <BatchResultsView results={sweepResults.slice(1)} sortMode={sweepSortMode} setSortMode={setSweepSortMode} />
+                    <div style={{ fontSize: "10px", fontWeight: 500, color: "#9b9b9b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "5px" }}>Letter variants a–z</div>
+                    <Results results={sweepRes.slice(1)} sort={sweepSort} setSort={setSweepSort} />
                   </div>
                 )}
               </div>
@@ -489,53 +513,40 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* ── History Mode ── */}
+        {/* ── history ── */}
         {mode === "history" && (
           <div className="animate-fade-in">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-              <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="var(--text-secondary)" strokeWidth="2" /><path d="M12 6v6l4 2" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" /></svg>
-                Recent Checks
-              </h2>
-              <div style={{ display: "flex", gap: "6px" }}>
-                <button onClick={() => void fetchHistory()}
-                  style={{ background: "transparent", border: "1px solid var(--border-color)", borderRadius: "7px", padding: "4px 10px", color: "var(--text-muted)", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
-                >
-                  {historyLoading ? <Spinner size={12} /> : "↻"} Refresh
-                </button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+              <span style={{ fontSize: "13px", fontWeight: 500 }}>Recent checks</span>
+              <div style={{ display: "flex", gap: "4px" }}>
+                <button onClick={() => void loadHistory()} style={ghostBtn}>{histLoad ? <Spin sz={11} /> : "↻"} Refresh</button>
                 {history.length > 0 && (
-                  <button onClick={() => void clearHistory()}
-                    style={{ background: clearConfirm ? "rgba(224,82,82,0.15)" : "transparent", border: `1px solid ${clearConfirm ? "rgba(224,82,82,0.5)" : "rgba(224,82,82,0.3)"}`, borderRadius: "7px", padding: "4px 10px", color: "#e05252", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}
-                  >
-                    🗑 {clearConfirm ? "Sure?" : "Clear"}
+                  <button onClick={() => void clearHistory()} style={{ ...ghostBtn, color: clearOk ? "#ec3425" : "#787878", borderColor: clearOk ? "#ec3425" : "#cecece" }}>
+                    {clearOk ? "Sure?" : "Clear"}
                   </button>
                 )}
               </div>
             </div>
             {history.length === 0 ? (
-              <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "32px", textAlign: "center", color: "var(--text-muted)", fontSize: "14px" }}>
-                No checks yet. Start by searching a username above.
-              </div>
+              <div style={{ padding: "32px 16px", textAlign: "center", border: "0.5px solid #e6e6e6", borderRadius: "2px", color: "#9b9b9b", fontSize: "13px" }}>No checks yet.</div>
             ) : (
-              <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "12px", overflow: "hidden" }}>
+              <div style={{ border: "0.5px solid #e6e6e6", borderRadius: "2px", overflow: "hidden" }}>
                 {history.map((item, i) => (
-                  <div key={item.id} style={{ display: "flex", alignItems: "center", padding: "11px 16px", borderBottom: i < history.length - 1 ? "1px solid var(--border-color)" : "none", gap: "12px" }}>
-                    <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "linear-gradient(135deg, #3dabf5 0%, #0052a3 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 700, color: "white", flexShrink: 0 }}>
-                      {item.username[0]?.toUpperCase()}
-                    </div>
+                  <div key={item.id} style={{ display: "flex", alignItems: "center", padding: "9px 14px", gap: "10px", ...(i < history.length - 1 ? DLBDR : {}) }}>
+                    <Ava username={item.username} sz={22} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "6px" }}>
-                        @{item.username}{item.hasPremium === "true" && <PremiumStar />}
+                      <div style={{ fontSize: "13px", fontWeight: 500, display: "flex", alignItems: "center", gap: "4px" }}>
+                        @{item.username}{item.hasPremium === "true" && <Star />}
                       </div>
-                      <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{formatDate(item.checkedAt)}</div>
+                      <div style={{ fontSize: "10px", color: "#9b9b9b", fontFamily: "'Courier New', monospace" }}>{fmtDate(item.checkedAt)}</div>
                     </div>
-                    <StatusBadge status={item.status} />
+                    <Badge status={item.status} />
                     <a href={`https://fragment.com/username/${item.username}`} target="_blank" rel="noopener noreferrer"
-                      style={{ color: "var(--text-muted)", textDecoration: "none", flexShrink: 0 }}
-                      onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--accent-blue)")}
-                      onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--text-muted)")}
+                      style={{ color: "#cecece", textDecoration: "none", flexShrink: 0, transition: "color 0.1s" }}
+                      onMouseEnter={e => (e.currentTarget.style.color = "#0d0d0d")}
+                      onMouseLeave={e => (e.currentTarget.style.color = "#cecece")}
                     >
-                      <svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
                     </a>
                   </div>
                 ))}
@@ -545,12 +556,17 @@ export default function HomePage() {
         )}
       </main>
 
-      {/* ── Footer ── */}
-      <footer style={{ borderTop: "1px solid var(--border-color)", padding: "24px", textAlign: "center" }}>
-        <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", flexWrap: "wrap" }}>
-          <span>Built with</span><TonLogo />
-          <a href="https://fragment.com" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-blue)", textDecoration: "none" }}>Fragment</a>
-          <span>·</span><span>Unofficial tool · Not affiliated with Telegram or Fragment</span>
+      {/* footer */}
+      <footer style={{ borderTop: "0.5px solid #e6e6e6", padding: "14px 24px" }}>
+        <p style={{ fontSize: "11px", color: "#9b9b9b", margin: 0, display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+          <TonLogo />
+          <a href="https://fragment.com" target="_blank" rel="noopener noreferrer"
+            style={{ color: "#0d0d0d", textDecoration: "none" }}
+            onMouseEnter={e => (e.currentTarget.style.textDecoration = "underline")}
+            onMouseLeave={e => (e.currentTarget.style.textDecoration = "none")}
+          >Fragment</a>
+          <span>·</span>
+          <span>Unofficial tool · Not affiliated with Telegram or Fragment</span>
         </p>
       </footer>
     </div>

@@ -306,7 +306,28 @@ export default function HomePage() {
     <div style={{ minHeight: "100vh", background: "var(--bg-primary)", color: "var(--text-primary)" }}>
 
       {/* ── Header ── */}
-      paste
+      <header style={{ borderBottom: "1px solid var(--border-color)", background: "rgba(21,30,39,0.95)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 50 }}>
+        <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 24px", height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <a href="https://fragment.com" target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: "13px", color: "var(--text-secondary)", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px" }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--accent-blue)")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--text-secondary)")}
+            >
+              fragment.com
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H4M10 2V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+            </a>
+            <button onClick={() => { setShowHistory(!showHistory); if (!showHistory) void fetchHistory(); }}
+              style={{ background: showHistory ? "rgba(61,171,245,0.12)" : "transparent", border: `1px solid ${showHistory ? "rgba(61,171,245,0.3)" : "var(--border-color)"}`, borderRadius: "7px", padding: "5px 12px", color: showHistory ? "var(--accent-blue)" : "var(--text-secondary)", fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 8v4l3 3M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+              History
+            </button>
+          </div>
+        </div>
+      </header>
 
       {/* ── Hero ── */}
       <section style={{ padding: "72px 24px 48px", textAlign: "center", position: "relative", overflow: "hidden" }}>

@@ -57,15 +57,25 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Admin-only route: check role directly in middleware
-  if (pathname.startsWith("/admin")) {
-    const role = await getRole(token);
-    if (role !== "admin") {
-      const homeUrl = req.nextUrl.clone();
-      homeUrl.pathname = "/";
-      homeUrl.search = "";
-      return NextResponse.redirect(homeUrl);
-    }
+  // Validate token for ALL protected routes (catches disabled/deleted keys)
+  const role = await getRole(token);
+
+  if (!role) {
+    const loginUrl = req.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.searchParams.set("from", pathname);
+    const response = NextResponse.redirect(loginUrl);
+    // Clear the stale cookie so user isn't stuck in a redirect loop
+    response.cookies.set("auth_token", "", { maxAge: 0, path: "/" });
+    return response;
+  }
+
+  // Admin-only route check
+  if (pathname.startsWith("/admin") && role !== "admin") {
+    const homeUrl = req.nextUrl.clone();
+    homeUrl.pathname = "/";
+    homeUrl.search = "";
+    return NextResponse.redirect(homeUrl);
   }
 
   return NextResponse.next();

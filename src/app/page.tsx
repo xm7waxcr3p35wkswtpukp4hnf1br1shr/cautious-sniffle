@@ -533,11 +533,6 @@ export default function HomePage() {
     } catch { return s; }
   };
 
-  // Sweep preview chars
-  const sweepChars = sweepMode === "digit-suffix" ? DIGITS : ALPHA;
-  const sweepPreviewCount = 5;
-  const sweepTotal = sweepChars.length;
-
   const TABS = [
     { key: "single"  as const, label: "Single" },
     { key: "batch"   as const, label: "Batch" },
@@ -793,7 +788,6 @@ export default function HomePage() {
                 {sweepMode === "digit-suffix"
                   ? <>Checks the exact username + all 10 digit variants (0–9). <span style={{ color: C.t0, fontWeight: 700 }}>11 requests total.</span></>
                   : <>Checks the exact username + all 26 letter variants (a–z). <span style={{ color: C.t0, fontWeight: 700 }}>27 requests total.</span></>
-                }}>11 requests total.</span></>
                 }
               </div>
 
@@ -828,7 +822,6 @@ export default function HomePage() {
                   ]}
                 />
               </div>
-              )}
 
               {/* Results */}
               {sweepRes.length > 0 && (

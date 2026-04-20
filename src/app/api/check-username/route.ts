@@ -178,7 +178,6 @@ async function checkOne(
       hasPremium: result.hasPremium != null ? String(result.hasPremium) : null,
     });
   } catch {
-    /* ignore */
   }
 
   return {

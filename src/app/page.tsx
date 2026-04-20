@@ -23,8 +23,7 @@ type HistoryItem = {
 };
 
 type Sort = "none" | "az" | "za" | "group";
-type SweepPos = "suffix" | "prefix";
-type SweepCharset = "letters" | "digits";
+type SweepMode = "alpha-suffix" | "alpha-prefix" | "digit-suffix";
 
 const CSS = {
   font: { fontFamily: "var(--font-mono)" } as React.CSSProperties,
@@ -420,9 +419,9 @@ function SegmentedControl<T extends string>({
 }
 
 // ── Build sweep candidates ────────────────────────────────────────────────────
-function buildSweepCandidates(base: string, pos: SweepPos, charset: SweepCharset): string[] {
-  const chars = charset === "letters" ? ALPHA : DIGITS;
-  const variants = chars.map(c => pos === "suffix" ? `${base}${c}` : `${c}${base}`);
+function buildSweepCandidates(base: string, mode: SweepMode): string[] {
+  const chars = mode === "digit-suffix" ? DIGITS : ALPHA;
+  const variants = chars.map(c => mode === "alpha-prefix" ? `${c}${base}` : `${base}${c}`);
   return [base, ...variants];
 }
 
@@ -432,8 +431,7 @@ export default function HomePage() {
   const [input, setInput]           = useState("");
   const [batchInput, setBatchInput] = useState("");
   const [sweepInput, setSweepInput] = useState("");
-  const [sweepPos, setSweepPos]     = useState<SweepPos>("suffix");
-  const [sweepCharset, setSweepCharset] = useState<SweepCharset>("letters");
+  const [sweepMode, setSweepMode]   = useState<SweepMode>("alpha-suffix");
   const [mode, setMode]             = useState<"single" | "batch" | "sweep" | "history">("single");
   const [loading, setLoading]       = useState(false);
   const [result, setResult]         = useState<CheckResult | null>(null);
@@ -513,7 +511,7 @@ export default function HomePage() {
   const checkSweep = useCallback(async () => {
     const base = sweepInput.trim().replace(/^@/, "").toLowerCase();
     if (!base) return;
-    const cands = buildSweepCandidates(base, sweepPos, sweepCharset);
+    const cands = buildSweepCandidates(base, sweepMode);
     setLoading(true); setError(null); setSweepRes([]); setSweepSort("none");
     try {
       const res = await fetch("/api/check-username", {
@@ -526,7 +524,7 @@ export default function HomePage() {
       else { setSweepRes(d.results ?? []); void loadHistory(); }
     } catch { setError("Network error."); }
     finally { setLoading(false); }
-  }, [sweepInput, sweepPos, sweepCharset, loadHistory, authHeaders]);
+  }, [sweepInput, sweepMode, loadHistory, authHeaders]);
 
   const fmtDate = (s: string) => {
     try {
@@ -536,9 +534,9 @@ export default function HomePage() {
   };
 
   // Sweep preview chars
-  const sweepChars = sweepCharset === "letters" ? ALPHA : DIGITS;
-  const sweepPreviewCount = sweepCharset === "letters" ? 5 : 5;
-  const sweepTotal = sweepChars.length; // 26 or 10
+  const sweepChars = sweepMode === "digit-suffix" ? DIGITS : ALPHA;
+  const sweepPreviewCount = 5;
+  const sweepTotal = sweepChars.length;
 
   const TABS = [
     { key: "single"  as const, label: "Single" },
@@ -792,9 +790,10 @@ export default function HomePage() {
                 lineHeight: 1.55,
                 ...CSS.font,
               }}>
-                {sweepCharset === "letters"
-                  ? <>Checks the exact username + all 26 letter variants (a–z). <span style={{ color: C.t0, fontWeight: 700 }}>27 requests total.</span></>
-                  : <>Checks the exact username + all 10 digit variants (0–9). <span style={{ color: C.t0, fontWeight: 700 }}>11 requests total.</span></>
+                {sweepMode === "digit-suffix"
+                  ? <>Checks the exact username + all 10 digit variants (0–9). <span style={{ color: C.t0, fontWeight: 700 }}>11 requests total.</span></>
+                  : <>Checks the exact username + all 26 letter variants (a–z). <span style={{ color: C.t0, fontWeight: 700 }}>27 requests total.</span></>
+                }}>11 requests total.</span></>
                 }
               </div>
 
@@ -818,51 +817,17 @@ export default function HomePage() {
 
               {/* Controls row */}
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginBottom: "14px" }}>
-                <SegmentedControl<SweepCharset>
-                  label="Chars"
-                  value={sweepCharset}
-                  onChange={v => { setSweepCharset(v); setSweepRes([]); }}
-                  options={[
-                    { k: "letters", label: "a–z" },
-                    { k: "digits",  label: "0–9" },
-                  ]}
-                />
-                <SegmentedControl<SweepPos>
+                <SegmentedControl<SweepMode>
                   label="Mode"
-                  value={sweepPos}
-                  onChange={v => { setSweepPos(v); setSweepRes([]); }}
+                  value={sweepMode}
+                  onChange={v => { setSweepMode(v); setSweepRes([]); }}
                   options={[
-                    { k: "suffix", label: sweepCharset === "letters" ? "username + a" : "username + 1" },
-                    { k: "prefix", label: sweepCharset === "letters" ? "a + username" : "1 + username" },
+                    { k: "alpha-suffix", label: "username + a" },
+                    { k: "alpha-prefix", label: "a + username" },
+                    { k: "digit-suffix", label: "username + 1" },
                   ]}
                 />
               </div>
-
-              {/* Preview chips */}
-              {sweepInput.trim() && (
-                <div style={{ display: "flex", gap: "3px", flexWrap: "wrap", marginBottom: "18px" }}>
-                  {[sweepInput.trim().toLowerCase(), ...sweepChars.slice(0, sweepPreviewCount).map(c =>
-                    sweepPos === "suffix"
-                      ? `${sweepInput.trim().toLowerCase()}${c}`
-                      : `${c}${sweepInput.trim().toLowerCase()}`
-                  )].map((u, i) => (
-                    <span key={i} style={{
-                      background: i === 0 ? C.t0 : C.bg3,
-                      border: `0.5px solid ${i === 0 ? C.t0 : C.line}`,
-                      borderRadius: "2px",
-                      padding: "2px 7px",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      color: i === 0 ? C.bg0 : C.t2,
-                      ...CSS.font,
-                    }}>{u}</span>
-                  ))}
-                  {sweepTotal - sweepPreviewCount > 0 && (
-                    <span style={{ fontSize: "11px", color: C.t3, alignSelf: "center", ...CSS.font }}>
-                      +{sweepTotal - sweepPreviewCount} more
-                    </span>
-                  )}
-                </div>
               )}
 
               {/* Results */}
@@ -879,7 +844,7 @@ export default function HomePage() {
                   {sweepRes.length > 1 && (
                     <div>
                       <div style={{ fontSize: "9px", fontWeight: 700, color: C.t2, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "5px", ...CSS.font }}>
-                        {sweepCharset === "letters" ? "Letter variants a–z" : "Digit variants 0–9"}
+                        {sweepMode === "digit-suffix" ? "Digit variants 0–9" : sweepMode === "alpha-prefix" ? "Letter variants a–z (prefix)" : "Letter variants a–z"}
                       </div>
                       <Results results={sweepRes.slice(1)} sort={sweepSort} setSort={setSweepSort} />
                     </div>

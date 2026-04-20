@@ -60,7 +60,6 @@ const STATUS_ORDER = ["Available", "For Sale", "Reserved", "Sold", "Taken", "Unk
 const ALPHA  = "abcdefghijklmnopqrstuvwxyz".split("");
 const DIGITS = "0123456789".split("");
 
-// ── Generate or load a persistent anonymous user ID ──────────────────────────
 function getOrCreateUserId(): string {
   try {
     const key = "username_tool_uid";
@@ -383,7 +382,6 @@ function PrimaryBtn({ onClick, disabled, loading, children }: {
   );
 }
 
-// ── SegmentedControl ──────────────────────────────────────────────────────────
 function SegmentedControl<T extends string>({
   label,
   options,
@@ -418,7 +416,6 @@ function SegmentedControl<T extends string>({
   );
 }
 
-// ── Build sweep candidates ────────────────────────────────────────────────────
 function buildSweepCandidates(base: string, mode: SweepMode): string[] {
   const chars = mode === "digit-suffix" ? DIGITS : ALPHA;
   const variants = chars.map(c => mode === "alpha-prefix" ? `${c}${base}` : `${base}${c}`);
@@ -427,7 +424,11 @@ function buildSweepCandidates(base: string, mode: SweepMode): string[] {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function HomePage() {
-  const [userId, setUserId]         = useState<string>("");
+  // userId kept in a ref so all callbacks always read the current value
+  // without stale closure issues. userIdDisplay drives the UI only.
+  const userIdRef = useRef<string>("");
+  const [userIdDisplay, setUserIdDisplay] = useState<string>("");
+
   const [input, setInput]           = useState("");
   const [batchInput, setBatchInput] = useState("");
   const [sweepInput, setSweepInput] = useState("");
@@ -445,25 +446,35 @@ export default function HomePage() {
   const [clearOk, setClearOk]       = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load / create userId once on mount
-  useEffect(() => { setUserId(getOrCreateUserId()); }, []);
+  useEffect(() => {
+    const uid = getOrCreateUserId();
+    userIdRef.current = uid;
+    setUserIdDisplay(uid);
+  }, []);
 
+  // authHeaders reads from ref — never stale regardless of render cycle
   const authHeaders = useCallback((): HeadersInit => ({
     "Content-Type": "application/json",
-    ...(userId ? { "x-user-id": userId } : {}),
-  }), [userId]);
+    ...(userIdRef.current ? { "x-user-id": userIdRef.current } : {}),
+  }), []);
 
   const loadHistory = useCallback(async () => {
-    if (!userId) return;
+    const uid = userIdRef.current;
+    if (!uid) return;
     setHistLoad(true);
     try {
-      const d = await (await fetch("/api/history", { headers: { "x-user-id": userId } })).json() as { history: HistoryItem[] };
+      const d = await (
+        await fetch("/api/history", { headers: { "x-user-id": uid } })
+      ).json() as { history: HistoryItem[] };
       setHistory(d.history ?? []);
     } catch { /**/ }
     finally { setHistLoad(false); }
-  }, [userId]);
+  }, []);
 
-  useEffect(() => { if (userId) void loadHistory(); }, [userId, loadHistory]);
+  // Trigger initial history load once userId is ready
+  useEffect(() => {
+    if (userIdDisplay) void loadHistory();
+  }, [userIdDisplay, loadHistory]);
 
   const clearHistory = useCallback(async () => {
     if (!clearOk) { setClearOk(true); setTimeout(() => setClearOk(false), 3000); return; }
@@ -773,7 +784,6 @@ export default function HomePage() {
           {/* ── Sweep ── */}
           {mode === "sweep" && (
             <div>
-              {/* Info banner */}
               <div style={{
                 padding: "9px 12px",
                 background: C.tonDim,
@@ -791,7 +801,6 @@ export default function HomePage() {
                 }
               </div>
 
-              {/* Input */}
               <InputRow style={{ marginBottom: "9px" }}>
                 <span style={{ padding: "0 4px 0 13px", color: C.t2, fontSize: "15px", userSelect: "none", flexShrink: 0, ...CSS.font }}>@</span>
                 <input
@@ -809,7 +818,6 @@ export default function HomePage() {
                 </PrimaryBtn>
               </InputRow>
 
-              {/* Controls row */}
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginBottom: "14px" }}>
                 <SegmentedControl<SweepMode>
                   label="Mode"
@@ -823,7 +831,6 @@ export default function HomePage() {
                 />
               </div>
 
-              {/* Results */}
               {sweepRes.length > 0 && (
                 <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
                   {sweepRes[0] && (
@@ -855,7 +862,7 @@ export default function HomePage() {
                   <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.04em", color: C.t2, ...CSS.font }}>
                     Your recent checks
                   </span>
-                  {userId && (
+                  {userIdDisplay && (
                     <div style={{ fontSize: "9px", color: C.t3, marginTop: "2px", letterSpacing: "0.04em", ...CSS.font }}>
                       private · stored by device ID
                     </div>

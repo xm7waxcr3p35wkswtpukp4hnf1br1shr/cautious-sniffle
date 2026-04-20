@@ -24,6 +24,7 @@ type HistoryItem = {
 
 type Sort = "none" | "az" | "za" | "group";
 type SweepMode = "alpha-suffix" | "alpha-prefix" | "digit-suffix";
+type GenSweepMode = "off" | "alpha-suffix" | "alpha-prefix" | "digit-suffix";
 
 const CSS = {
   font: { fontFamily: "var(--font-mono)" } as React.CSSProperties,
@@ -72,6 +73,90 @@ function getOrCreateUserId(): string {
   } catch {
     return "anonymous";
   }
+}
+
+// ── Real English word list ────────────────────────────────────────────────────
+// Common short nouns, verbs, adjectives — no numbers, no gibberish
+const WORD_LIST: string[] = [
+  "able","acid","aged","also","area","army","away","baby","back","ball",
+  "band","bank","base","bath","bear","beat","been","bell","best","bird",
+  "bite","blow","blue","boat","body","bold","bone","book","born","both",
+  "bowl","brave","brew","bridge","brief","bring","broad","broke","brown",
+  "burn","busy","calm","camp","card","care","case","cash","cast","cave",
+  "cell","chat","chef","chip","city","clan","clay","clip","club","clue",
+  "coal","coat","code","coin","cold","come","cool","cope","copy","core",
+  "corn","cost","cozy","crew","crop","crow","cure","cute","dark","data",
+  "dawn","dead","deal","dean","dear","deck","deep","deer","desk","dial",
+  "dice","diet","dirt","disk","dive","dock","dome","door","dove","down",
+  "draw","drop","drum","dual","duke","dull","dusk","dust","duty","each",
+  "earn","easy","edge","epic","even","ever","evil","exam","face","fact",
+  "fair","fall","fame","farm","fast","fate","feat","feed","feel","feet",
+  "fell","felt","file","fill","film","find","fire","firm","fish","fist",
+  "flag","flat","flaw","flee","flew","flip","flow","foam","fold","folk",
+  "fond","font","food","fool","ford","fork","form","fort","foul","free",
+  "from","fuel","full","fund","fury","fuse","gain","gale","game","gate",
+  "gave","gaze","gear","give","glad","glow","glue","goal","gold","gone",
+  "good","grab","gray","grid","grin","grip","grow","gulf","gust","half",
+  "hall","hand","hang","hard","harm","hash","hate","have","hawk","haze",
+  "head","heal","heap","heat","heel","help","hero","hide","high","hill",
+  "hint","hold","hole","holy","home","hook","hope","horn","host","huge",
+  "hull","hunt","hurt","icon","idea","idle","inch","iron","isle","jade",
+  "join","jump","just","keen","keep","kind","king","kite","knew","knot",
+  "lake","lamp","land","lane","lark","last","late","lead","leaf","lean",
+  "left","lens","life","lift","like","lime","line","link","lion","list",
+  "live","load","lock","loft","lone","long","look","lord","lore","lore",
+  "lost","loud","love","luck","made","main","make","male","mall","many",
+  "mare","mark","mars","mask","mass","mast","mate","maze","meal","mean",
+  "meat","meet","melt","menu","mesh","mild","mile","milk","mill","mind",
+  "mint","miss","mist","mode","moon","more","moss","most","move","much",
+  "mule","myth","nail","name","neat","need","nest","news","next","nice",
+  "nook","norm","note","oath","once","open","oven","over","page","pale",
+  "palm","park","part","pass","past","path","peak","pear","peer","pick",
+  "pier","pine","pink","pipe","plan","play","plot","plow","plug","plus",
+  "poem","poet","poll","pond","pool","port","post","prey","pull","pure",
+  "push","quit","race","rain","rake","rank","rare","read","real","reed",
+  "reef","rent","rest","rice","rich","ride","ring","ripe","rise","risk",
+  "road","roam","roar","rock","role","roll","roof","root","rope","rose",
+  "ruin","rule","rush","safe","sage","sail","sake","sale","salt","same",
+  "sand","sane","save","scan","seal","seed","seek","seen","self","send",
+  "shed","ship","shop","show","side","silk","site","size","skin","skip",
+  "slim","slip","slow","snow","soap","soft","soil","sole","some","song",
+  "soon","sort","soul","soup","sour","span","spin","spot","star","stay",
+  "stem","step","stir","stop","store","storm","straw","stream","street",
+  "strip","strong","surge","swap","swift","swim","tale","tall","task",
+  "team","tear","tell","text","than","that","them","then","they","thin",
+  "this","tide","tile","time","tiny","tire","toad","told","toll","tone",
+  "took","tool","town","trek","trim","trio","trip","trod","true","tube",
+  "tune","turf","turn","twin","type","unit","upon","used","user","vale",
+  "vast","view","vine","void","vote","wade","wake","walk","wall","warm",
+  "warp","wave","wear","weed","well","west","wild","will","wind","wine",
+  "wing","wire","wise","wish","with","wolf","wood","word","work","worn",
+  "wren","yard","year","your","zeal","zero","zone",
+];
+
+// Shuffle + deduplicate within a session using a session-level used set
+const _usedWords = new Set<string>();
+
+function pickWords(count: number): string[] {
+  // Reset if we've used too many
+  if (_usedWords.size + count > WORD_LIST.length) _usedWords.clear();
+
+  const available = WORD_LIST.filter(w => !_usedWords.has(w));
+  // Fisher-Yates shuffle on available slice
+  const pool = [...available];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const picked = pool.slice(0, Math.min(count, pool.length));
+  picked.forEach(w => _usedWords.add(w));
+  return picked;
+}
+
+function buildSweepCandidates(base: string, mode: SweepMode): string[] {
+  const chars = mode === "digit-suffix" ? DIGITS : ALPHA;
+  const variants = chars.map(c => mode === "alpha-prefix" ? `${c}${base}` : `${base}${c}`);
+  return [base, ...variants];
 }
 
 // ── Components ────────────────────────────────────────────────────────────────
@@ -416,16 +501,8 @@ function SegmentedControl<T extends string>({
   );
 }
 
-function buildSweepCandidates(base: string, mode: SweepMode): string[] {
-  const chars = mode === "digit-suffix" ? DIGITS : ALPHA;
-  const variants = chars.map(c => mode === "alpha-prefix" ? `${c}${base}` : `${base}${c}`);
-  return [base, ...variants];
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function HomePage() {
-  // userId kept in a ref so all callbacks always read the current value
-  // without stale closure issues. userIdDisplay drives the UI only.
   const userIdRef = useRef<string>("");
   const [userIdDisplay, setUserIdDisplay] = useState<string>("");
 
@@ -433,7 +510,7 @@ export default function HomePage() {
   const [batchInput, setBatchInput] = useState("");
   const [sweepInput, setSweepInput] = useState("");
   const [sweepMode, setSweepMode]   = useState<SweepMode>("alpha-suffix");
-  const [mode, setMode]             = useState<"single" | "batch" | "sweep" | "history">("single");
+  const [mode, setMode]             = useState<"single" | "batch" | "sweep" | "generate" | "history">("single");
   const [loading, setLoading]       = useState(false);
   const [result, setResult]         = useState<CheckResult | null>(null);
   const [batchRes, setBatchRes]     = useState<CheckResult[]>([]);
@@ -446,13 +523,21 @@ export default function HomePage() {
   const [clearOk, setClearOk]       = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Generator state
+  const [genCountInput, setGenCountInput] = useState("20");
+  const [genList, setGenList]             = useState<string[]>([]);
+  const [genChecked, setGenChecked]       = useState<CheckResult[]>([]);
+  const [genSort, setGenSort]             = useState<Sort>("none");
+  const [genChecking, setGenChecking]     = useState(false);
+  const [genCopied, setGenCopied]         = useState(false);
+  const [genSweepMode, setGenSweepMode]   = useState<GenSweepMode>("off");
+
   useEffect(() => {
     const uid = getOrCreateUserId();
     userIdRef.current = uid;
     setUserIdDisplay(uid);
   }, []);
 
-  // authHeaders reads from ref — never stale regardless of render cycle
   const authHeaders = useCallback((): HeadersInit => ({
     "Content-Type": "application/json",
     ...(userIdRef.current ? { "x-user-id": userIdRef.current } : {}),
@@ -471,7 +556,6 @@ export default function HomePage() {
     finally { setHistLoad(false); }
   }, []);
 
-  // Trigger initial history load once userId is ready
   useEffect(() => {
     if (userIdDisplay) void loadHistory();
   }, [userIdDisplay, loadHistory]);
@@ -484,7 +568,10 @@ export default function HomePage() {
     } catch { /**/ }
   }, [clearOk, authHeaders]);
 
-  const resetState = () => { setResult(null); setBatchRes([]); setSweepRes([]); setError(null); };
+  const resetState = () => {
+    setResult(null); setBatchRes([]); setSweepRes([]);
+    setGenList([]); setGenChecked([]); setError(null);
+  };
 
   const checkSingle = useCallback(async () => {
     const u = input.trim().replace(/^@/, "").toLowerCase();
@@ -537,6 +624,47 @@ export default function HomePage() {
     finally { setLoading(false); }
   }, [sweepInput, sweepMode, loadHistory, authHeaders]);
 
+  // ── Generator actions ──────────────────────────────────────────────────────
+
+  const handleGenerate = useCallback(() => {
+    const count = Math.max(1, Math.min(200, parseInt(genCountInput) || 20));
+    const list = pickWords(count);
+    setGenList(list);
+    setGenChecked([]);
+    setGenSort("none");
+  }, [genCountInput]);
+
+  const handleCheckGenerated = useCallback(async () => {
+    if (!genList.length) return;
+    setGenChecking(true); setGenChecked([]); setGenSort("none");
+    try {
+      let usernames: string[];
+      if (genSweepMode !== "off") {
+        // Build sweep candidates for each word
+        usernames = genList.flatMap(w => buildSweepCandidates(w, genSweepMode as SweepMode));
+      } else {
+        usernames = genList;
+      }
+      // API max 200
+      usernames = usernames.slice(0, 200);
+      const res = await fetch("/api/check-username", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ usernames }),
+      });
+      const d = await res.json() as { results?: CheckResult[]; error?: string };
+      if (d.results) { setGenChecked(d.results); void loadHistory(); }
+    } catch { /**/ }
+    finally { setGenChecking(false); }
+  }, [genList, genSweepMode, loadHistory, authHeaders]);
+
+  const handleCopyGenerated = useCallback(() => {
+    navigator.clipboard.writeText(genList.join("\n")).then(() => {
+      setGenCopied(true);
+      setTimeout(() => setGenCopied(false), 1500);
+    });
+  }, [genList]);
+
   const fmtDate = (s: string) => {
     try {
       const d = new Date(s);
@@ -545,10 +673,11 @@ export default function HomePage() {
   };
 
   const TABS = [
-    { key: "single"  as const, label: "Single" },
-    { key: "batch"   as const, label: "Batch" },
-    { key: "sweep"   as const, label: "Sweep" },
-    { key: "history" as const, label: "History" },
+    { key: "single"   as const, label: "Single" },
+    { key: "batch"    as const, label: "Batch" },
+    { key: "sweep"    as const, label: "Sweep" },
+    { key: "generate" as const, label: "Generate" },
+    { key: "history"  as const, label: "History" },
   ];
 
   const ghostBtn = (danger = false, active = false): React.CSSProperties => ({
@@ -564,6 +693,13 @@ export default function HomePage() {
     transition: "all 100ms ease",
     ...CSS.font,
   });
+
+  // sweep request count hint
+  const sweepRequestCount = genSweepMode === "off"
+    ? genList.length
+    : genSweepMode === "digit-suffix"
+      ? genList.length * 11
+      : genList.length * 27;
 
   return (
     <>
@@ -599,7 +735,7 @@ export default function HomePage() {
           </div>
 
           {/* Tabs */}
-          <div style={{ display: "flex", borderBottom: `0.5px solid ${C.line}`, marginBottom: "24px" }}>
+          <div style={{ display: "flex", borderBottom: `0.5px solid ${C.line}`, marginBottom: "24px", overflowX: "auto" }}>
             {TABS.map(({ key, label }) => {
               const active = mode === key;
               return (
@@ -617,6 +753,8 @@ export default function HomePage() {
                     cursor: "pointer",
                     marginBottom: "-0.5px",
                     transition: "color 100ms ease, border-color 100ms ease",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
                     ...CSS.font,
                   }}
                 >{label}</button>
@@ -849,6 +987,198 @@ export default function HomePage() {
                       <Results results={sweepRes.slice(1)} sort={sweepSort} setSort={setSweepSort} />
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Generate ── */}
+          {mode === "generate" && (
+            <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
+              <div style={{
+                padding: "9px 12px",
+                background: C.tonDim,
+                border: `0.5px solid rgba(0,152,234,0.25)`,
+                borderRadius: "2px",
+                fontSize: "12px",
+                color: C.t1,
+                marginBottom: "20px",
+                lineHeight: 1.55,
+                ...CSS.font,
+              }}>
+                Generates real English words as Telegram username candidates. No numbers, no gibberish — only clean, recognizable words.
+              </div>
+
+              {/* Controls */}
+              <div style={{
+                background: C.bg1,
+                border: `0.5px solid ${C.line}`,
+                borderRadius: "2px",
+                overflow: "hidden",
+                marginBottom: "14px",
+              }}>
+                <div style={{
+                  background: C.bg2, borderBottom: `0.5px solid ${C.line}`,
+                  padding: "7px 13px",
+                  fontSize: "10px", color: C.t3, letterSpacing: "0.06em", ...CSS.font,
+                }}>
+                  generator settings
+                </div>
+                <div style={{ padding: "16px 14px", display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "flex-end" }}>
+                  {/* Count — plain text input */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                    <span style={{ fontSize: "10px", color: C.t2, letterSpacing: "0.07em", textTransform: "uppercase", ...CSS.font }}>Count</span>
+                    <input
+                      type="text"
+                      value={genCountInput}
+                      onChange={e => setGenCountInput(e.target.value.replace(/\D/g, ""))}
+                      placeholder="20"
+                      style={{
+                        background: C.bg2,
+                        border: `0.5px solid ${C.line}`,
+                        borderRadius: "2px",
+                        padding: "7px 10px",
+                        color: C.t0,
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        outline: "none",
+                        width: "80px",
+                        ...CSS.font,
+                      }}
+                    />
+                    <span style={{ fontSize: "9px", color: C.t3, ...CSS.font }}>max 200</span>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", paddingBottom: "18px" }}>
+                    <button
+                      onClick={handleGenerate}
+                      style={{
+                        background: C.t0,
+                        color: C.bg0,
+                        border: "none",
+                        borderRadius: "2px",
+                        padding: "8px 18px",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        letterSpacing: "0.05em",
+                        cursor: "pointer",
+                        transition: "background 120ms ease",
+                        ...CSS.font,
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(240,240,242,0.85)"; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.t0; }}
+                    >
+                      Generate
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Generated list */}
+              {genList.length > 0 && (
+                <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
+                  {/* Sweep mode selector */}
+                  <div style={{
+                    background: C.bg1,
+                    border: `0.5px solid ${C.line}`,
+                    borderRadius: "2px",
+                    overflow: "hidden",
+                    marginBottom: "10px",
+                  }}>
+                    <div style={{
+                      background: C.bg2, borderBottom: `0.5px solid ${C.line}`,
+                      padding: "7px 13px",
+                      fontSize: "10px", color: C.t3, letterSpacing: "0.06em", ...CSS.font,
+                    }}>
+                      sweep mode for availability check
+                    </div>
+                    <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                      <SegmentedControl<GenSweepMode>
+                        label="Sweep"
+                        value={genSweepMode}
+                        onChange={v => { setGenSweepMode(v); setGenChecked([]); }}
+                        options={[
+                          { k: "off",          label: "Off (exact)" },
+                          { k: "alpha-suffix", label: "word + a–z" },
+                          { k: "alpha-prefix", label: "a–z + word" },
+                          { k: "digit-suffix", label: "word + 0–9" },
+                        ]}
+                      />
+                      {genSweepMode !== "off" && (
+                        <div style={{ fontSize: "10px", color: C.t2, ...CSS.font }}>
+                          {sweepRequestCount} requests total
+                          {sweepRequestCount > 200 && (
+                            <span style={{ color: "#e8a030", marginLeft: "6px" }}>· capped at 200</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action bar */}
+                  <div style={{ display: "flex", gap: "5px", marginBottom: "10px", flexWrap: "wrap" }}>
+                    <button onClick={handleCopyGenerated} style={ghostBtn(false, genCopied)}>
+                      {genCopied ? "✓ Copied" : "Copy all"}
+                    </button>
+                    <button
+                      onClick={() => void handleCheckGenerated()}
+                      disabled={genChecking}
+                      style={{
+                        ...ghostBtn(),
+                        background: genChecking ? "transparent" : C.tonDim,
+                        borderColor: genChecking ? C.line : "rgba(0,152,234,0.3)",
+                        color: genChecking ? C.t2 : C.ton,
+                        cursor: genChecking ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {genChecking ? <><Spinner size={10} />Checking…</> : "Check availability"}
+                    </button>
+                    <span style={{ fontSize: "11px", color: C.t2, display: "flex", alignItems: "center", marginLeft: "4px", ...CSS.font }}>
+                      {genList.length} words
+                    </span>
+                  </div>
+
+                  {genChecked.length > 0 ? (
+                    <Results results={genChecked} sort={genSort} setSort={setGenSort} />
+                  ) : (
+                    <div style={{ border: `0.5px solid ${C.line}`, borderRadius: "2px", overflow: "hidden", background: C.bg1 }}>
+                      {genList.map((u, i) => (
+                        <div
+                          key={u}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "28px 1fr 14px",
+                            alignItems: "center",
+                            padding: "7px 13px",
+                            gap: "10px",
+                            ...(i < genList.length - 1 ? ROW_BORDER : {}),
+                            transition: "background 100ms ease",
+                          }}
+                          onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.background = C.bg3)}
+                          onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
+                        >
+                          <Avatar username={u} size={22} />
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: C.t0, ...CSS.font }}>@{u}</span>
+                          <ExtLink href={`https://fragment.com/username/${u}`} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {genList.length === 0 && (
+                <div style={{
+                  padding: "40px 16px",
+                  textAlign: "center",
+                  border: `0.5px solid ${C.line}`,
+                  borderRadius: "2px",
+                  color: C.t2,
+                  fontSize: "12px",
+                  background: C.bg1,
+                  ...CSS.font,
+                }}>
+                  Enter a count and click Generate
                 </div>
               )}
             </div>

@@ -29,14 +29,8 @@ async function checkTelegramAvailability(
 
     const desc = (data.description ?? "").toLowerCase();
 
-    // Чат реально не найден = свободен
     if (desc.includes("chat not found")) return "free";
 
-    // Все остальные ошибки = зарезервирован/заблокирован:
-    // "bad request: chat_id is invalid"
-    // "bad request: username invalid"
-    // "bad request: username not occupied"
-    // "forbidden: ..."
     if (
       desc.includes("invalid") ||
       desc.includes("forbidden") ||
@@ -142,7 +136,10 @@ async function checkViaFragmentAPI(username: string): Promise<{
   }
 }
 
-async function checkOne(rawUsername: string): Promise<{
+async function checkOne(
+  rawUsername: string,
+  userId?: string | null
+): Promise<{
   username: string;
   status: string;
   name?: string | null;
@@ -163,7 +160,6 @@ async function checkOne(rawUsername: string): Promise<{
     result = { ...scraped, name: null, photo: null, hasPremium: null };
   }
 
-  // Если Fragment говорит "Available" — проверяем реально ли свободен в Telegram
   if (result.status === "Available") {
     const tgStatus = await checkTelegramAvailability(username);
     console.log(`[check] @${username}: Fragment=Available, TG=${tgStatus}`);
@@ -174,6 +170,7 @@ async function checkOne(rawUsername: string): Promise<{
 
   try {
     await db.insert(usernameChecks).values({
+      userId: userId ?? null,
       username,
       status: result.status,
       name: result.name ?? null,
@@ -197,12 +194,13 @@ async function checkOne(rawUsername: string): Promise<{
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const raw = searchParams.get("username") ?? "";
+  const userId = req.headers.get("x-user-id");
 
   if (!raw.trim()) {
     return NextResponse.json({ error: "Username is required" }, { status: 400 });
   }
 
-  const result = await checkOne(raw);
+  const result = await checkOne(raw, userId);
 
   if (result.error) {
     return NextResponse.json(
@@ -220,6 +218,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as { usernames: string[] };
   const usernames: string[] = body.usernames ?? [];
+  const userId = req.headers.get("x-user-id");
 
   if (!Array.isArray(usernames) || usernames.length === 0) {
     return NextResponse.json({ error: "usernames array is required" }, { status: 400 });
@@ -229,7 +228,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Max 200 usernames per batch" }, { status: 400 });
   }
 
-  const settled = await Promise.allSettled(usernames.map((raw) => checkOne(raw)));
+  const settled = await Promise.allSettled(
+    usernames.map((raw) => checkOne(raw, userId))
+  );
 
   const data = settled.map((r) =>
     r.status === "fulfilled"

@@ -26,7 +26,11 @@ function fmt(s: string | null) {
   if (!s) return "—";
   try {
     const d = new Date(s);
-    return isNaN(d.getTime()) ? s : d.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    return isNaN(d.getTime()) ? s : d.toLocaleString("ru-RU", {
+      timeZone: "Europe/Moscow",
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
   } catch { return s; }
 }
 
@@ -35,6 +39,15 @@ function Spinner({ size = 13 }: { size?: number }) {
     <svg style={{ animation: "spin 0.7s linear infinite" }} width={size} height={size} viewBox="0 0 24 24" fill="none">
       <circle cx="12" cy="12" r="10" stroke="rgba(240,240,242,0.15)" strokeWidth="2.5" />
       <path d="M12 2a10 10 0 0 1 10 10" stroke="rgba(240,240,242,0.8)" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function RefreshIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M3 3v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -215,7 +228,7 @@ export default function AdminPage() {
                 onMouseEnter={e => { e.currentTarget.style.color = C.t0; e.currentTarget.style.borderColor = C.lineHi; }}
                 onMouseLeave={e => { e.currentTarget.style.color = C.t2; e.currentTarget.style.borderColor = C.line; }}
               >
-                ← Back to tool
+                Back to tool
               </a>
             </div>
           </div>
@@ -309,7 +322,8 @@ export default function AdminPage() {
                 padding: "3px 10px", color: C.t2, fontSize: "11px", cursor: "pointer",
                 display: "flex", alignItems: "center", gap: "5px", marginBottom: "10px", ...F,
               }}>
-                {loading ? <Spinner size={10} /> : "↻"} Refresh
+                {loading ? <Spinner size={10} /> : <RefreshIcon size={11} />}
+                Refresh
               </button>
             </div>
 

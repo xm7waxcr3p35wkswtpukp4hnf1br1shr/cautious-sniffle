@@ -61,6 +61,8 @@ const STATUS_ORDER = ["Available", "For Sale", "Reserved", "Sold", "Taken", "Unk
 const ALPHA  = "abcdefghijklmnopqrstuvwxyz".split("");
 const DIGITS = "0123456789".split("");
 
+const PAGE_SIZE = 200;
+
 function getOrCreateUserId(): string {
   try {
     const key = "username_tool_uid";
@@ -72,51 +74,6 @@ function getOrCreateUserId(): string {
     return uid;
   } catch {
     return "anonymous";
-  }
-}
-
-// Session-level used-words tracker (persists across Generate clicks so no repeats)
-const _usedWords = new Set<string>();
-
-function pickWordsFromList(list: string[], count: number): string[] {
-  const available = list.filter(w => !_usedWords.has(w));
-  if (available.length === 0) {
-    // All words exhausted — reset and start over
-    _usedWords.clear();
-    return pickWordsFromList(list, count);
-  }
-  const pool = [...available];
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
-  const picked = pool.slice(0, Math.min(count, pool.length));
-  picked.forEach(w => _usedWords.add(w));
-  return picked;
-}
-
-// Fetch and parse a word list from a URL (Pastebin, raw gist, etc.)
-async function fetchWordList(url: string): Promise<{ words: string[]; error?: string }> {
-  try {
-    // Convert Pastebin share URL to raw URL automatically
-    const rawUrl = url
-      .replace("pastebin.com/", "pastebin.com/raw/")
-      .replace("/raw/raw/", "/raw/"); // avoid double /raw/
-
-    const res = await fetch(rawUrl, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-
-    const words = text
-      .split(/[\n\r,;|\t]+/)
-      .map(w => w.trim().toLowerCase().replace(/[^a-z0-9_]/g, ""))
-      .filter(w => w.length >= 3 && w.length <= 32 && /^[a-z]/.test(w));
-
-    if (words.length === 0) return { words: [], error: "No valid words found in the list (need 3–32 chars, start with a letter)" };
-    return { words };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { words: [], error: `Failed to fetch: ${msg}` };
   }
 }
 
@@ -477,7 +434,7 @@ export default function HomePage() {
   const [batchInput, setBatchInput] = useState("");
   const [sweepInput, setSweepInput] = useState("");
   const [sweepMode, setSweepMode]   = useState<SweepMode>("alpha-suffix");
-  const [mode, setMode]             = useState<"single" | "batch" | "sweep" | "generate" | "history">("single");
+  const [mode, setMode]             = useState<"single" | "batch" | "sweep" | "parser" | "history">("single");
   const [loading, setLoading]       = useState(false);
   const [result, setResult]         = useState<CheckResult | null>(null);
   const [batchRes, setBatchRes]     = useState<CheckResult[]>([]);
@@ -490,21 +447,22 @@ export default function HomePage() {
   const [clearOk, setClearOk]       = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Generator state
-  const [genList, setGenList]         = useState<string[]>([]);
-  const [genChecked, setGenChecked]   = useState<CheckResult[]>([]);
-  const [genSort, setGenSort]         = useState<Sort>("none");
-  const [genChecking, setGenChecking] = useState(false);
-  const [genCopied, setGenCopied]     = useState(false);
-  const [genSweepMode, setGenSweepMode] = useState<GenSweepMode>("off");
+  // Parser state
+  // allWords holds the full list loaded from URL, seenIndices tracks which pages were already shown
+  const allWordsRef    = useRef<string[]>([]);   // full deduplicated word list from server
+  const shownIndices   = useRef<Set<number>>(new Set()); // which word indices have been shown already
 
-  // Word list URL (Pastebin or any raw text URL)
+  const [parserList, setParserList]         = useState<string[]>([]);   // current page being shown
+  const [parserChecked, setParserChecked]   = useState<CheckResult[]>([]);
+  const [parserSort, setParserSort]         = useState<Sort>("none");
+  const [parserChecking, setParserChecking] = useState(false);
+  const [parserCopied, setParserCopied]     = useState(false);
+  const [parserSweepMode, setParserSweepMode] = useState<GenSweepMode>("off");
+
   const [wordListUrl, setWordListUrl]           = useState("");
   const [wordListFetching, setWordListFetching] = useState(false);
   const [wordListError, setWordListError]       = useState<string | null>(null);
   const [wordListInfo, setWordListInfo]         = useState<string | null>(null);
-  // Cached remote word list
-  const remoteWordsRef = useRef<string[] | null>(null);
 
   useEffect(() => {
     const uid = getOrCreateUserId();
@@ -544,7 +502,7 @@ export default function HomePage() {
 
   const resetState = () => {
     setResult(null); setBatchRes([]); setSweepRes([]);
-    setGenList([]); setGenChecked([]); setError(null);
+    setParserList([]); setParserChecked([]); setError(null);
     setWordListError(null); setWordListInfo(null);
   };
 
@@ -599,49 +557,84 @@ export default function HomePage() {
     finally { setLoading(false); }
   }, [sweepInput, sweepMode, loadHistory, authHeaders]);
 
-  // ── Word list URL fetch ────────────────────────────────────────────────────
-
+  // ── Parser: fetch word list via server proxy ───────────────────────────────
   const handleFetchWordList = useCallback(async () => {
     if (!wordListUrl.trim()) return;
     setWordListFetching(true);
     setWordListError(null);
     setWordListInfo(null);
-    remoteWordsRef.current = null;
-    _usedWords.clear(); // reset used tracker when loading new list
-    const { words, error: err } = await fetchWordList(wordListUrl.trim());
-    if (err) {
-      setWordListError(err);
-    } else {
-      remoteWordsRef.current = words;
-      setWordListInfo(`✓ Loaded ${words.length} words`);
+    allWordsRef.current = [];
+    shownIndices.current = new Set();
+    setParserList([]);
+    setParserChecked([]);
+
+    try {
+      const res = await fetch(
+        `/api/fetch-wordlist?url=${encodeURIComponent(wordListUrl.trim())}`
+      );
+      const data = await res.json() as { words?: string[]; total?: number; error?: string };
+      if (!res.ok || data.error) {
+        setWordListError(data.error ?? "Failed to load word list");
+      } else {
+        allWordsRef.current = data.words ?? [];
+        shownIndices.current = new Set();
+        setWordListInfo(
+          `✓ Загружено ${data.total ?? data.words?.length ?? 0} слов · показывается по ${PAGE_SIZE} без повторений`
+        );
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setWordListError(`Ошибка сети: ${msg}`);
+    } finally {
+      setWordListFetching(false);
     }
-    setWordListFetching(false);
   }, [wordListUrl]);
 
-  // ── Generator actions ──────────────────────────────────────────────────────
-
-  const handleGenerate = useCallback(() => {
-    if (!remoteWordsRef.current) {
-      setWordListError("Load a word list from Pastebin first");
+  // Pick next PAGE_SIZE unique words never shown before in this session
+  const handleNextPage = useCallback(() => {
+    const all = allWordsRef.current;
+    if (!all.length) {
+      setWordListError("Сначала загрузите список слов");
       return;
     }
-    const list = pickWordsFromList(remoteWordsRef.current, 200);
-    setGenList(list);
-    setGenChecked([]);
-    setGenSort("none");
+
+    // Gather indices not yet shown
+    const available: number[] = [];
+    for (let i = 0; i < all.length; i++) {
+      if (!shownIndices.current.has(i)) available.push(i);
+    }
+
+    if (available.length === 0) {
+      setWordListError(`Все ${all.length} слов были показаны. Загрузите новый список или перезагрузите страницу.`);
+      return;
+    }
+
+    // Shuffle available indices and pick PAGE_SIZE
+    for (let i = available.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [available[i], available[j]] = [available[j], available[i]];
+    }
+
+    const picked = available.slice(0, PAGE_SIZE);
+    picked.forEach(idx => shownIndices.current.add(idx));
+
+    const words = picked.map(idx => all[idx]);
+    setParserList(words);
+    setParserChecked([]);
+    setParserSort("none");
+    setWordListError(null);
   }, []);
 
-  const handleCheckGenerated = useCallback(async () => {
-    if (!genList.length) return;
-    setGenChecking(true); setGenChecked([]); setGenSort("none");
+  const handleCheckParsed = useCallback(async () => {
+    if (!parserList.length) return;
+    setParserChecking(true); setParserChecked([]); setParserSort("none");
     try {
       let usernames: string[];
-      if (genSweepMode !== "off") {
-        usernames = genList.flatMap(w => buildSweepCandidates(w, genSweepMode as SweepMode));
+      if (parserSweepMode !== "off") {
+        usernames = parserList.flatMap(w => buildSweepCandidates(w, parserSweepMode as SweepMode));
       } else {
-        usernames = genList;
+        usernames = parserList;
       }
-      // API max 200
       usernames = usernames.slice(0, 200);
       const res = await fetch("/api/check-username", {
         method: "POST",
@@ -649,22 +642,26 @@ export default function HomePage() {
         body: JSON.stringify({ usernames }),
       });
       const d = await res.json() as { results?: CheckResult[]; error?: string };
-      if (d.results) { setGenChecked(d.results); void loadHistory(); }
+      if (d.results) { setParserChecked(d.results); void loadHistory(); }
     } catch { /**/ }
-    finally { setGenChecking(false); }
-  }, [genList, genSweepMode, loadHistory, authHeaders]);
+    finally { setParserChecking(false); }
+  }, [parserList, parserSweepMode, loadHistory, authHeaders]);
 
-  const handleCopyGenerated = useCallback(() => {
-    navigator.clipboard.writeText(genList.join("\n")).then(() => {
-      setGenCopied(true);
-      setTimeout(() => setGenCopied(false), 1500);
+  const handleCopyParsed = useCallback(() => {
+    navigator.clipboard.writeText(parserList.join("\n")).then(() => {
+      setParserCopied(true);
+      setTimeout(() => setParserCopied(false), 1500);
     });
-  }, [genList]);
+  }, [parserList]);
 
   const fmtDate = (s: string) => {
     try {
       const d = new Date(s);
-      return isNaN(d.getTime()) ? s : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      return isNaN(d.getTime()) ? s : d.toLocaleString("ru-RU", {
+        timeZone: "Europe/Moscow",
+        month: "short", day: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      });
     } catch { return s; }
   };
 
@@ -672,7 +669,7 @@ export default function HomePage() {
     { key: "single"   as const, label: "Single" },
     { key: "batch"    as const, label: "Batch" },
     { key: "sweep"    as const, label: "Sweep" },
-    { key: "generate" as const, label: "Generate" },
+    { key: "parser"   as const, label: "Parser" },
     { key: "history"  as const, label: "History" },
   ];
 
@@ -690,12 +687,15 @@ export default function HomePage() {
     ...CSS.font,
   });
 
-  // sweep request count hint
-  const sweepRequestCount = genSweepMode === "off"
-    ? genList.length
-    : genSweepMode === "digit-suffix"
-      ? genList.length * 11
-      : genList.length * 27;
+  const sweepRequestCount = parserSweepMode === "off"
+    ? parserList.length
+    : parserSweepMode === "digit-suffix"
+      ? parserList.length * 11
+      : parserList.length * 27;
+
+  const remainingWords = allWordsRef.current.length > 0
+    ? allWordsRef.current.length - shownIndices.current.size
+    : 0;
 
   return (
     <>
@@ -988,8 +988,8 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* ── Generate ── */}
-          {mode === "generate" && (
+          {/* ── Parser ── */}
+          {mode === "parser" && (
             <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
               <div style={{
                 padding: "9px 12px",
@@ -1002,10 +1002,10 @@ export default function HomePage() {
                 lineHeight: 1.55,
                 ...CSS.font,
               }}>
-                Load a word list from Pastebin (or any raw text URL), then generate up to 200 unique candidates per batch. Already-shown words are skipped automatically.
+                Загрузите список слов по ссылке (Pastebin или любой raw-текст). Каждый клик «Следующие 200» выдаёт новую порцию без повторений — даже если в списке 10&thinsp;000 слов.
               </div>
 
-              {/* Controls */}
+              {/* Word list URL */}
               <div style={{
                 background: C.bg1,
                 border: `0.5px solid ${C.line}`,
@@ -1018,104 +1018,102 @@ export default function HomePage() {
                   padding: "7px 13px",
                   fontSize: "10px", color: C.t3, letterSpacing: "0.06em", ...CSS.font,
                 }}>
-                  word list source
+                  источник · pastebin / raw-ссылка
                 </div>
-                <div style={{ padding: "16px 14px", display: "flex", flexDirection: "column", gap: "14px" }}>
-
-                  {/* Word list URL */}
-                  <div>
-                    <div style={{ fontSize: "10px", color: C.t2, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "6px", ...CSS.font }}>
-                      Pastebin / raw text URL
-                    </div>
-                    <div style={{ display: "flex", gap: "6px" }}>
-                      <input
-                        type="text"
-                        value={wordListUrl}
-                        onChange={e => {
-                          setWordListUrl(e.target.value);
-                          setWordListError(null);
-                          setWordListInfo(null);
-                          remoteWordsRef.current = null;
-                        }}
-                        placeholder="https://pastebin.com/xxxxxxxx"
-                        style={{
-                          flex: 1,
-                          background: C.bg2,
-                          border: `0.5px solid ${wordListError ? "rgba(240,64,64,0.4)" : C.line}`,
-                          borderRadius: "2px",
-                          padding: "7px 10px",
-                          color: C.t0,
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          outline: "none",
-                          ...CSS.font,
-                        }}
-                      />
-                      <button
-                        onClick={() => void handleFetchWordList()}
-                        disabled={wordListFetching || !wordListUrl.trim()}
-                        style={{
-                          padding: "0 14px",
-                          background: wordListFetching || !wordListUrl.trim() ? "rgba(240,240,242,0.05)" : C.tonDim,
-                          border: `0.5px solid ${wordListFetching || !wordListUrl.trim() ? C.line : "rgba(0,152,234,0.3)"}`,
-                          borderRadius: "2px",
-                          color: wordListFetching || !wordListUrl.trim() ? C.t3 : C.ton,
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          cursor: wordListFetching || !wordListUrl.trim() ? "not-allowed" : "pointer",
-                          whiteSpace: "nowrap",
-                          display: "flex", alignItems: "center", gap: "5px",
-                          transition: "all 100ms ease",
-                          ...CSS.font,
-                        }}
-                      >
-                        {wordListFetching ? <><Spinner size={10} />Loading…</> : "Load"}
-                      </button>
-                    </div>
-                    {wordListError && (
-                      <div style={{ fontSize: "11px", color: "#f04040", marginTop: "5px", ...CSS.font }}>✕ {wordListError}</div>
-                    )}
-                    {wordListInfo && (
-                      <div style={{ fontSize: "11px", color: "#35c96b", marginTop: "5px", ...CSS.font }}>{wordListInfo}</div>
-                    )}
-                  </div>
-
-                  {/* Generate button */}
-                  <div>
-                    <button
-                      onClick={handleGenerate}
-                      disabled={!remoteWordsRef.current}
+                <div style={{ padding: "14px" }}>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <input
+                      type="text"
+                      value={wordListUrl}
+                      onChange={e => {
+                        setWordListUrl(e.target.value);
+                        setWordListError(null);
+                        setWordListInfo(null);
+                        allWordsRef.current = [];
+                        shownIndices.current = new Set();
+                      }}
+                      onKeyDown={e => { if (e.key === "Enter") void handleFetchWordList(); }}
+                      placeholder="https://pastebin.com/xxxxxxxx"
                       style={{
-                        background: remoteWordsRef.current ? C.t0 : "rgba(240,240,242,0.05)",
-                        color: remoteWordsRef.current ? C.bg0 : C.t3,
-                        border: "none",
+                        flex: 1,
+                        background: C.bg2,
+                        border: `0.5px solid ${wordListError ? "rgba(240,64,64,0.4)" : C.line}`,
                         borderRadius: "2px",
-                        padding: "9px 20px",
+                        padding: "7px 10px",
+                        color: C.t0,
                         fontSize: "12px",
-                        fontWeight: 700,
-                        letterSpacing: "0.05em",
-                        cursor: remoteWordsRef.current ? "pointer" : "not-allowed",
-                        transition: "background 120ms ease",
+                        fontWeight: 600,
+                        outline: "none",
                         ...CSS.font,
                       }}
-                      onMouseEnter={e => { if (remoteWordsRef.current) (e.currentTarget as HTMLButtonElement).style.background = "rgba(240,240,242,0.85)"; }}
-                      onMouseLeave={e => { if (remoteWordsRef.current) (e.currentTarget as HTMLButtonElement).style.background = C.t0; }}
+                    />
+                    <button
+                      onClick={() => void handleFetchWordList()}
+                      disabled={wordListFetching || !wordListUrl.trim()}
+                      style={{
+                        padding: "0 14px",
+                        background: wordListFetching || !wordListUrl.trim() ? "rgba(240,240,242,0.05)" : C.tonDim,
+                        border: `0.5px solid ${wordListFetching || !wordListUrl.trim() ? C.line : "rgba(0,152,234,0.3)"}`,
+                        borderRadius: "2px",
+                        color: wordListFetching || !wordListUrl.trim() ? C.t3 : C.ton,
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        cursor: wordListFetching || !wordListUrl.trim() ? "not-allowed" : "pointer",
+                        whiteSpace: "nowrap",
+                        display: "flex", alignItems: "center", gap: "5px",
+                        transition: "all 100ms ease",
+                        ...CSS.font,
+                      }}
                     >
-                      Generate
+                      {wordListFetching ? <><Spinner size={10} />Загрузка…</> : "Загрузить"}
                     </button>
-                    {!remoteWordsRef.current && (
-                      <span style={{ fontSize: "10px", color: C.t3, marginLeft: "10px", ...CSS.font }}>
-                        load a word list first
-                      </span>
-                    )}
                   </div>
+                  {wordListError && (
+                    <div style={{ fontSize: "11px", color: "#f04040", marginTop: "6px", ...CSS.font }}>✕ {wordListError}</div>
+                  )}
+                  {wordListInfo && !wordListError && (
+                    <div style={{ fontSize: "11px", color: "#35c96b", marginTop: "6px", ...CSS.font }}>{wordListInfo}</div>
+                  )}
                 </div>
               </div>
 
-              {/* Generated list */}
-              {genList.length > 0 && (
+              {/* Next page button */}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
+                <button
+                  onClick={handleNextPage}
+                  disabled={!allWordsRef.current.length}
+                  style={{
+                    background: allWordsRef.current.length ? C.t0 : "rgba(240,240,242,0.05)",
+                    color: allWordsRef.current.length ? C.bg0 : C.t3,
+                    border: "none",
+                    borderRadius: "2px",
+                    padding: "9px 20px",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    letterSpacing: "0.05em",
+                    cursor: allWordsRef.current.length ? "pointer" : "not-allowed",
+                    transition: "background 120ms ease",
+                    ...CSS.font,
+                  }}
+                  onMouseEnter={e => { if (allWordsRef.current.length) (e.currentTarget as HTMLButtonElement).style.background = "rgba(240,240,242,0.85)"; }}
+                  onMouseLeave={e => { if (allWordsRef.current.length) (e.currentTarget as HTMLButtonElement).style.background = C.t0; }}
+                >
+                  {parserList.length === 0 ? "Показать первые 200" : "Следующие 200"}
+                </button>
+                {allWordsRef.current.length > 0 && (
+                  <span style={{ fontSize: "11px", color: C.t2, ...CSS.font }}>
+                    осталось <span style={{ color: remainingWords === 0 ? "#f04040" : C.t0, fontWeight: 700 }}>{remainingWords}</span> из {allWordsRef.current.length}
+                  </span>
+                )}
+                {!allWordsRef.current.length && (
+                  <span style={{ fontSize: "10px", color: C.t3, ...CSS.font }}>сначала загрузите список</span>
+                )}
+              </div>
+
+              {/* Parser list */}
+              {parserList.length > 0 && (
                 <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
-                  {/* Sweep mode selector */}
+                  {/* Sweep mode */}
                   <div style={{
                     background: C.bg1,
                     border: `0.5px solid ${C.line}`,
@@ -1128,25 +1126,25 @@ export default function HomePage() {
                       padding: "7px 13px",
                       fontSize: "10px", color: C.t3, letterSpacing: "0.06em", ...CSS.font,
                     }}>
-                      sweep mode for availability check
+                      режим проверки
                     </div>
                     <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: "8px" }}>
                       <SegmentedControl<GenSweepMode>
                         label="Sweep"
-                        value={genSweepMode}
-                        onChange={v => { setGenSweepMode(v); setGenChecked([]); }}
+                        value={parserSweepMode}
+                        onChange={v => { setParserSweepMode(v); setParserChecked([]); }}
                         options={[
-                          { k: "off",          label: "Off (exact)" },
-                          { k: "alpha-suffix", label: "word + a–z" },
-                          { k: "alpha-prefix", label: "a–z + word" },
-                          { k: "digit-suffix", label: "word + 0–9" },
+                          { k: "off",          label: "Точно" },
+                          { k: "alpha-suffix", label: "слово + a–z" },
+                          { k: "alpha-prefix", label: "a–z + слово" },
+                          { k: "digit-suffix", label: "слово + 0–9" },
                         ]}
                       />
-                      {genSweepMode !== "off" && (
+                      {parserSweepMode !== "off" && (
                         <div style={{ fontSize: "10px", color: C.t2, ...CSS.font }}>
-                          {sweepRequestCount} requests total
+                          {sweepRequestCount} запросов
                           {sweepRequestCount > 200 && (
-                            <span style={{ color: "#e8a030", marginLeft: "6px" }}>· capped at 200</span>
+                            <span style={{ color: "#e8a030", marginLeft: "6px" }}>· обрезается до 200</span>
                           )}
                         </div>
                       )}
@@ -1155,46 +1153,41 @@ export default function HomePage() {
 
                   {/* Action bar */}
                   <div style={{ display: "flex", gap: "5px", marginBottom: "10px", flexWrap: "wrap" }}>
-                    <button onClick={handleCopyGenerated} style={ghostBtn(false, genCopied)}>
-                      {genCopied ? "✓ Copied" : "Copy all"}
+                    <button onClick={handleCopyParsed} style={ghostBtn(false, parserCopied)}>
+                      {parserCopied ? "✓ Скопировано" : "Скопировать"}
                     </button>
                     <button
-                      onClick={() => void handleCheckGenerated()}
-                      disabled={genChecking}
+                      onClick={() => void handleCheckParsed()}
+                      disabled={parserChecking}
                       style={{
                         ...ghostBtn(),
-                        background: genChecking ? "transparent" : C.tonDim,
-                        borderColor: genChecking ? C.line : "rgba(0,152,234,0.3)",
-                        color: genChecking ? C.t2 : C.ton,
-                        cursor: genChecking ? "not-allowed" : "pointer",
+                        background: parserChecking ? "transparent" : C.tonDim,
+                        borderColor: parserChecking ? C.line : "rgba(0,152,234,0.3)",
+                        color: parserChecking ? C.t2 : C.ton,
+                        cursor: parserChecking ? "not-allowed" : "pointer",
                       }}
                     >
-                      {genChecking ? <><Spinner size={10} />Checking…</> : "Check availability"}
+                      {parserChecking ? <><Spinner size={10} />Проверка…</> : "Проверить доступность"}
                     </button>
                     <span style={{ fontSize: "11px", color: C.t2, display: "flex", alignItems: "center", marginLeft: "4px", ...CSS.font }}>
-                      {genList.length} words · from URL
-                      {remoteWordsRef.current && (
-                        <span style={{ color: C.t3, marginLeft: "6px" }}>
-                          · {remoteWordsRef.current.length - _usedWords.size} remaining
-                        </span>
-                      )}
+                      {parserList.length} слов
                     </span>
                   </div>
 
-                  {genChecked.length > 0 ? (
-                    <Results results={genChecked} sort={genSort} setSort={setGenSort} />
+                  {parserChecked.length > 0 ? (
+                    <Results results={parserChecked} sort={parserSort} setSort={setParserSort} />
                   ) : (
                     <div style={{ border: `0.5px solid ${C.line}`, borderRadius: "2px", overflow: "hidden", background: C.bg1 }}>
-                      {genList.map((u, i) => (
+                      {parserList.map((u, i) => (
                         <div
-                          key={u}
+                          key={u + i}
                           style={{
                             display: "grid",
                             gridTemplateColumns: "28px 1fr 14px",
                             alignItems: "center",
                             padding: "7px 13px",
                             gap: "10px",
-                            ...(i < genList.length - 1 ? ROW_BORDER : {}),
+                            ...(i < parserList.length - 1 ? ROW_BORDER : {}),
                             transition: "background 100ms ease",
                           }}
                           onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.background = C.bg3)}
@@ -1210,7 +1203,7 @@ export default function HomePage() {
                 </div>
               )}
 
-              {genList.length === 0 && (
+              {parserList.length === 0 && allWordsRef.current.length === 0 && (
                 <div style={{
                   padding: "40px 16px",
                   textAlign: "center",
@@ -1221,9 +1214,7 @@ export default function HomePage() {
                   background: C.bg1,
                   ...CSS.font,
                 }}>
-                  {remoteWordsRef.current
-                    ? "Click Generate to pick a fresh batch"
-                    : "Load a word list from Pastebin to get started"}
+                  Загрузите список слов по ссылке, чтобы начать
                 </div>
               )}
             </div>
@@ -1245,7 +1236,13 @@ export default function HomePage() {
                 </div>
                 <div style={{ display: "flex", gap: "3px" }}>
                   <button onClick={() => void loadHistory()} style={ghostBtn()}>
-                    {histLoad ? <Spinner size={10} /> : "Refresh"}
+                    {histLoad ? <Spinner size={10} /> : (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M3 3v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                    Refresh
                   </button>
                   {history.length > 0 && (
                     <button onClick={() => void clearHistory()} style={ghostBtn(true, clearOk)}>

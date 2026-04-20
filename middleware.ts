@@ -17,7 +17,7 @@ async function getRole(token: string): Promise<string | null> {
   try {
     const hash = await hashKey(token);
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/api_keys?key_hash=eq.${hash}&select=role,is_active&limit=1`,
+      `${SUPABASE_URL}/rest/v1/api_keys?key_hash=eq.${hash}&select=role,is_active,expires_at&limit=1`,
       {
         headers: {
           apikey: SUPABASE_SERVICE_KEY,
@@ -25,9 +25,15 @@ async function getRole(token: string): Promise<string | null> {
         },
       }
     );
-    const rows = (await res.json()) as { role: string; is_active: boolean }[];
+    const rows = (await res.json()) as {
+      role: string;
+      is_active: boolean;
+      expires_at: string | null;
+    }[];
     const row = rows?.[0];
     if (!row || !row.is_active) return null;
+    // Check expiry
+    if (row.expires_at && new Date(row.expires_at) < new Date()) return null;
     return row.role;
   } catch {
     return null;
@@ -57,7 +63,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Validate token for ALL protected routes (catches disabled/deleted keys)
+  // Validate token for ALL protected routes (catches disabled/deleted/expired keys)
   const role = await getRole(token);
 
   if (!role) {

@@ -23,25 +23,26 @@ type HistoryItem = {
 };
 
 type Sort = "none" | "az" | "za" | "group";
+type SweepPos = "suffix" | "prefix";
+type SweepCharset = "letters" | "digits";
 
 const CSS = {
   font: { fontFamily: "var(--font-mono)" } as React.CSSProperties,
 };
 
-// Dark theme color palette (Fragment.dev aesthetic)
 const C = {
-  bg0:        "#0d0d0f",      // deepest bg
-  bg1:        "#111113",      // card bg
-  bg2:        "#161618",      // secondary card / header bg
-  bg3:        "#1b1b1e",      // tertiary / hover
-  line:       "rgba(255,255,255,0.07)",
-  lineHi:     "rgba(255,255,255,0.13)",
-  t0:         "#f0f0f2",      // primary text
-  t1:         "rgba(240,240,242,0.6)",  // secondary text
-  t2:         "rgba(240,240,242,0.35)", // muted text
-  t3:         "rgba(240,240,242,0.18)", // very muted
-  ton:        "#0098ea",
-  tonDim:     "rgba(0,152,234,0.15)",
+  bg0:     "#0d0d0f",
+  bg1:     "#111113",
+  bg2:     "#161618",
+  bg3:     "#1b1b1e",
+  line:    "rgba(255,255,255,0.07)",
+  lineHi:  "rgba(255,255,255,0.13)",
+  t0:      "#f0f0f2",
+  t1:      "rgba(240,240,242,0.6)",
+  t2:      "rgba(240,240,242,0.35)",
+  t3:      "rgba(240,240,242,0.18)",
+  ton:     "#0098ea",
+  tonDim:  "rgba(0,152,234,0.15)",
 };
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; border: string; dot: string }> = {
@@ -57,7 +58,25 @@ const getS = (s: string) =>
   STATUS_CFG[s] ?? { label: s, color: "#7a7a88", bg: "rgba(120,120,136,0.10)", border: "rgba(120,120,136,0.22)", dot: "#7a7a88" };
 
 const STATUS_ORDER = ["Available", "For Sale", "Reserved", "Sold", "Taken", "Unknown", "Invalid"];
-const ALPHA = "abcdefghijklmnopqrstuvwxyz".split("");
+const ALPHA  = "abcdefghijklmnopqrstuvwxyz".split("");
+const DIGITS = "0123456789".split("");
+
+// ── Generate or load a persistent anonymous user ID ──────────────────────────
+function getOrCreateUserId(): string {
+  try {
+    const key = "username_tool_uid";
+    let uid = localStorage.getItem(key);
+    if (!uid) {
+      uid = crypto.randomUUID();
+      localStorage.setItem(key, uid);
+    }
+    return uid;
+  } catch {
+    return "anonymous";
+  }
+}
+
+// ── Components ────────────────────────────────────────────────────────────────
 
 function StatusPill({ status }: { status: string }) {
   const cfg = getS(status);
@@ -213,9 +232,9 @@ function StatsPills({ results }: { results: CheckResult[] }) {
 
 function SortBar({ sort, setSort }: { sort: Sort; setSort: (s: Sort) => void }) {
   const opts: { k: Sort; label: string }[] = [
-    { k: "none", label: "Default" },
-    { k: "az", label: "A → Z" },
-    { k: "za", label: "Z → A" },
+    { k: "none",  label: "Default" },
+    { k: "az",    label: "A → Z" },
+    { k: "za",    label: "Z → A" },
     { k: "group", label: "Group" },
   ];
   return (
@@ -365,11 +384,56 @@ function PrimaryBtn({ onClick, disabled, loading, children }: {
   );
 }
 
+// ── SegmentedControl ──────────────────────────────────────────────────────────
+function SegmentedControl<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { k: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
+      <span style={{ fontSize: "10px", color: C.t2, letterSpacing: "0.05em", marginRight: "5px", ...CSS.font }}>{label}</span>
+      {options.map(({ k, label: lbl }) => (
+        <button key={k} onClick={() => onChange(k)} style={{
+          background: value === k ? C.bg3 : "transparent",
+          border: `0.5px solid ${value === k ? C.lineHi : C.line}`,
+          borderRadius: "2px",
+          padding: "3px 9px",
+          color: value === k ? C.t0 : C.t2,
+          fontSize: "11px",
+          fontWeight: value === k ? 700 : 400,
+          cursor: "pointer",
+          transition: "all 100ms ease",
+          ...CSS.font,
+        }}>
+          {lbl}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Build sweep candidates ────────────────────────────────────────────────────
+function buildSweepCandidates(base: string, pos: SweepPos, charset: SweepCharset): string[] {
+  const chars = charset === "letters" ? ALPHA : DIGITS;
+  const variants = chars.map(c => pos === "suffix" ? `${base}${c}` : `${c}${base}`);
+  return [base, ...variants];
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function HomePage() {
+  const [userId, setUserId]         = useState<string>("");
   const [input, setInput]           = useState("");
   const [batchInput, setBatchInput] = useState("");
   const [sweepInput, setSweepInput] = useState("");
-  const [sweepPos, setSweepPos]     = useState<"suffix" | "prefix">("suffix");
+  const [sweepPos, setSweepPos]     = useState<SweepPos>("suffix");
+  const [sweepCharset, setSweepCharset] = useState<SweepCharset>("letters");
   const [mode, setMode]             = useState<"single" | "batch" | "sweep" | "history">("single");
   const [loading, setLoading]       = useState(false);
   const [result, setResult]         = useState<CheckResult | null>(null);
@@ -383,21 +447,33 @@ export default function HomePage() {
   const [clearOk, setClearOk]       = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Load / create userId once on mount
+  useEffect(() => { setUserId(getOrCreateUserId()); }, []);
+
+  const authHeaders = useCallback((): HeadersInit => ({
+    "Content-Type": "application/json",
+    ...(userId ? { "x-user-id": userId } : {}),
+  }), [userId]);
+
   const loadHistory = useCallback(async () => {
+    if (!userId) return;
     setHistLoad(true);
     try {
-      const d = await (await fetch("/api/history")).json() as { history: HistoryItem[] };
+      const d = await (await fetch("/api/history", { headers: { "x-user-id": userId } })).json() as { history: HistoryItem[] };
       setHistory(d.history ?? []);
     } catch { /**/ }
     finally { setHistLoad(false); }
-  }, []);
+  }, [userId]);
 
-  useEffect(() => { void loadHistory(); }, [loadHistory]);
+  useEffect(() => { if (userId) void loadHistory(); }, [userId, loadHistory]);
 
   const clearHistory = useCallback(async () => {
     if (!clearOk) { setClearOk(true); setTimeout(() => setClearOk(false), 3000); return; }
-    try { await fetch("/api/history", { method: "DELETE" }); setHistory([]); setClearOk(false); } catch { /**/ }
-  }, [clearOk]);
+    try {
+      await fetch("/api/history", { method: "DELETE", headers: authHeaders() });
+      setHistory([]); setClearOk(false);
+    } catch { /**/ }
+  }, [clearOk, authHeaders]);
 
   const resetState = () => { setResult(null); setBatchRes([]); setSweepRes([]); setError(null); };
 
@@ -406,13 +482,15 @@ export default function HomePage() {
     if (!u) return;
     setLoading(true); setError(null); setResult(null);
     try {
-      const res = await fetch(`/api/check-username?username=${encodeURIComponent(u)}`);
+      const res = await fetch(`/api/check-username?username=${encodeURIComponent(u)}`, {
+        headers: authHeaders(),
+      });
       const d = await res.json() as CheckResult & { error?: string };
       if (!res.ok) setError(d.error ?? "Something went wrong");
       else { setResult(d as CheckResult); void loadHistory(); }
     } catch { setError("Network error."); }
     finally { setLoading(false); }
-  }, [input, loadHistory]);
+  }, [input, loadHistory, authHeaders]);
 
   const checkBatch = useCallback(async () => {
     const lines = batchInput.split(/[\n,;]+/).map(s => s.trim().replace(/^@/, "").toLowerCase()).filter(Boolean);
@@ -420,27 +498,35 @@ export default function HomePage() {
     if (lines.length > 200) { setError("Max 200 usernames."); return; }
     setLoading(true); setError(null); setBatchRes([]); setBatchSort("none");
     try {
-      const res = await fetch("/api/check-username", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ usernames: lines }) });
+      const res = await fetch("/api/check-username", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ usernames: lines }),
+      });
       const d = await res.json() as { results?: CheckResult[]; error?: string };
       if (!res.ok) setError(d.error ?? "Something went wrong");
       else { setBatchRes(d.results ?? []); void loadHistory(); }
     } catch { setError("Network error."); }
     finally { setLoading(false); }
-  }, [batchInput, loadHistory]);
+  }, [batchInput, loadHistory, authHeaders]);
 
   const checkSweep = useCallback(async () => {
     const base = sweepInput.trim().replace(/^@/, "").toLowerCase();
     if (!base) return;
-    const cands = [base, ...ALPHA.map(l => sweepPos === "suffix" ? `${base}${l}` : `${l}${base}`)];
+    const cands = buildSweepCandidates(base, sweepPos, sweepCharset);
     setLoading(true); setError(null); setSweepRes([]); setSweepSort("none");
     try {
-      const res = await fetch("/api/check-username", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ usernames: cands }) });
+      const res = await fetch("/api/check-username", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ usernames: cands }),
+      });
       const d = await res.json() as { results?: CheckResult[]; error?: string };
       if (!res.ok) setError(d.error ?? "Something went wrong");
       else { setSweepRes(d.results ?? []); void loadHistory(); }
     } catch { setError("Network error."); }
     finally { setLoading(false); }
-  }, [sweepInput, sweepPos, loadHistory]);
+  }, [sweepInput, sweepPos, sweepCharset, loadHistory, authHeaders]);
 
   const fmtDate = (s: string) => {
     try {
@@ -448,6 +534,11 @@ export default function HomePage() {
       return isNaN(d.getTime()) ? s : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
     } catch { return s; }
   };
+
+  // Sweep preview chars
+  const sweepChars = sweepCharset === "letters" ? ALPHA : DIGITS;
+  const sweepPreviewCount = sweepCharset === "letters" ? 5 : 5;
+  const sweepTotal = sweepChars.length; // 26 or 10
 
   const TABS = [
     { key: "single"  as const, label: "Single" },
@@ -491,9 +582,9 @@ export default function HomePage() {
       `}</style>
 
       <div style={{ minHeight: "100vh", background: C.bg0, color: C.t0, display: "flex", flexDirection: "column" }}>
-
         <main style={{ maxWidth: "620px", width: "100%", margin: "0 auto", padding: "32px 24px 80px", flex: 1 }}>
 
+          {/* Header */}
           <div style={{ marginBottom: "24px", paddingBottom: "20px", borderBottom: `0.5px solid ${C.line}` }}>
             <h1 style={{ fontSize: "18px", fontWeight: 700, margin: "0 0 5px", letterSpacing: "-0.01em", color: C.t0, ...CSS.font }}>
               Username Tool
@@ -503,6 +594,7 @@ export default function HomePage() {
             </p>
           </div>
 
+          {/* Tabs */}
           <div style={{ display: "flex", borderBottom: `0.5px solid ${C.line}`, marginBottom: "24px" }}>
             {TABS.map(({ key, label }) => {
               const active = mode === key;
@@ -528,6 +620,7 @@ export default function HomePage() {
             })}
           </div>
 
+          {/* Error */}
           {error && (
             <div style={{
               padding: "9px 12px",
@@ -546,6 +639,7 @@ export default function HomePage() {
             </div>
           )}
 
+          {/* ── Single ── */}
           {mode === "single" && (
             <div>
               <InputRow style={{ marginBottom: "5px" }}>
@@ -566,7 +660,7 @@ export default function HomePage() {
                 </PrimaryBtn>
               </InputRow>
               <p style={{ fontSize: "10px", color: C.t3, marginBottom: "24px", marginTop: "4px", ...CSS.font }}>
-                3–32 chars * letters, numbers, underscores * press Enter
+                3–32 chars · letters, numbers, underscores · press Enter
               </p>
 
               {result && !error && (
@@ -595,7 +689,7 @@ export default function HomePage() {
                         )}
                         {result.status === "Reserved" && (
                           <div style={{ fontSize: "11px", color: "#6b8cff", marginTop: "4px", ...CSS.font }}>
-                            Reserved by Telegram * cannot be registered
+                            Reserved by Telegram · cannot be registered
                           </div>
                         )}
                       </div>
@@ -637,6 +731,7 @@ export default function HomePage() {
             </div>
           )}
 
+          {/* ── Batch ── */}
           {mode === "batch" && (
             <div>
               <div style={{ border: `0.5px solid ${C.line}`, borderRadius: "2px", overflow: "hidden", marginBottom: "10px", background: C.bg1 }}>
@@ -646,7 +741,7 @@ export default function HomePage() {
                   borderBottom: `0.5px solid ${C.line}`,
                   display: "flex", justifyContent: "space-between", alignItems: "center",
                 }}>
-                  <span style={{ fontSize: "10px", color: C.t2, letterSpacing: "0.04em", ...CSS.font }}>Single? Only Batch.</span>
+                  <span style={{ fontSize: "10px", color: C.t2, letterSpacing: "0.04em", ...CSS.font }}>One username per line, or comma/semicolon separated</span>
                   <span style={{ fontSize: "11px", color: C.t1, fontWeight: 600, ...CSS.font }}>
                     {batchInput.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).length}
                     <span style={{ color: C.t3, fontWeight: 400 }}>/200</span>
@@ -682,8 +777,10 @@ export default function HomePage() {
             </div>
           )}
 
+          {/* ── Sweep ── */}
           {mode === "sweep" && (
             <div>
+              {/* Info banner */}
               <div style={{
                 padding: "9px 12px",
                 background: C.tonDim,
@@ -695,9 +792,13 @@ export default function HomePage() {
                 lineHeight: 1.55,
                 ...CSS.font,
               }}>
-                Checks the exact username + all 26 letter variants (a–z appended or prepended).{" "}
-                <span style={{ color: C.t0, fontWeight: 700 }}>27 requests total.</span>
+                {sweepCharset === "letters"
+                  ? <>Checks the exact username + all 26 letter variants (a–z). <span style={{ color: C.t0, fontWeight: 700 }}>27 requests total.</span></>
+                  : <>Checks the exact username + all 10 digit variants (0–9). <span style={{ color: C.t0, fontWeight: 700 }}>11 requests total.</span></>
+                }
               </div>
+
+              {/* Input */}
               <InputRow style={{ marginBottom: "9px" }}>
                 <span style={{ padding: "0 4px 0 13px", color: C.t2, fontSize: "15px", userSelect: "none", flexShrink: 0, ...CSS.font }}>@</span>
                 <input
@@ -714,28 +815,37 @@ export default function HomePage() {
                   {loading ? "Sweeping…" : "Sweep"}
                 </PrimaryBtn>
               </InputRow>
-              <div style={{ display: "flex", gap: "3px", alignItems: "center", marginBottom: "14px" }}>
-                <span style={{ fontSize: "10px", color: C.t2, letterSpacing: "0.05em", marginRight: "5px", ...CSS.font }}>Mode</span>
-                {(["suffix", "prefix"] as const).map(k => (
-                  <button key={k} onClick={() => setSweepPos(k)} style={{
-                    background: sweepPos === k ? C.bg3 : "transparent",
-                    border: `0.5px solid ${sweepPos === k ? C.lineHi : C.line}`,
-                    borderRadius: "2px",
-                    padding: "3px 9px",
-                    color: sweepPos === k ? C.t0 : C.t2,
-                    fontSize: "11px",
-                    fontWeight: sweepPos === k ? 700 : 400,
-                    cursor: "pointer",
-                    transition: "all 100ms ease",
-                    ...CSS.font,
-                  }}>
-                    {k === "suffix" ? "username + a" : "a + username"}
-                  </button>
-                ))}
+
+              {/* Controls row */}
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginBottom: "14px" }}>
+                <SegmentedControl<SweepCharset>
+                  label="Chars"
+                  value={sweepCharset}
+                  onChange={v => { setSweepCharset(v); setSweepRes([]); }}
+                  options={[
+                    { k: "letters", label: "a–z" },
+                    { k: "digits",  label: "0–9" },
+                  ]}
+                />
+                <SegmentedControl<SweepPos>
+                  label="Mode"
+                  value={sweepPos}
+                  onChange={v => { setSweepPos(v); setSweepRes([]); }}
+                  options={[
+                    { k: "suffix", label: sweepCharset === "letters" ? "username + a" : "username + 1" },
+                    { k: "prefix", label: sweepCharset === "letters" ? "a + username" : "1 + username" },
+                  ]}
+                />
               </div>
+
+              {/* Preview chips */}
               {sweepInput.trim() && (
                 <div style={{ display: "flex", gap: "3px", flexWrap: "wrap", marginBottom: "18px" }}>
-                  {[sweepInput.trim().toLowerCase(), ...ALPHA.slice(0, 5).map(l => sweepPos === "suffix" ? `${sweepInput.trim().toLowerCase()}${l}` : `${l}${sweepInput.trim().toLowerCase()}`)].map((u, i) => (
+                  {[sweepInput.trim().toLowerCase(), ...sweepChars.slice(0, sweepPreviewCount).map(c =>
+                    sweepPos === "suffix"
+                      ? `${sweepInput.trim().toLowerCase()}${c}`
+                      : `${c}${sweepInput.trim().toLowerCase()}`
+                  )].map((u, i) => (
                     <span key={i} style={{
                       background: i === 0 ? C.t0 : C.bg3,
                       border: `0.5px solid ${i === 0 ? C.t0 : C.line}`,
@@ -747,9 +857,15 @@ export default function HomePage() {
                       ...CSS.font,
                     }}>{u}</span>
                   ))}
-                  <span style={{ fontSize: "11px", color: C.t3, alignSelf: "center", ...CSS.font }}>+{26 - 5} more</span>
+                  {sweepTotal - sweepPreviewCount > 0 && (
+                    <span style={{ fontSize: "11px", color: C.t3, alignSelf: "center", ...CSS.font }}>
+                      +{sweepTotal - sweepPreviewCount} more
+                    </span>
+                  )}
                 </div>
               )}
+
+              {/* Results */}
               {sweepRes.length > 0 && (
                 <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
                   {sweepRes[0] && (
@@ -762,7 +878,9 @@ export default function HomePage() {
                   )}
                   {sweepRes.length > 1 && (
                     <div>
-                      <div style={{ fontSize: "9px", fontWeight: 700, color: C.t2, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "5px", ...CSS.font }}>Letter variants a–z</div>
+                      <div style={{ fontSize: "9px", fontWeight: 700, color: C.t2, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "5px", ...CSS.font }}>
+                        {sweepCharset === "letters" ? "Letter variants a–z" : "Digit variants 0–9"}
+                      </div>
                       <Results results={sweepRes.slice(1)} sort={sweepSort} setSort={setSweepSort} />
                     </div>
                   )}
@@ -771,12 +889,20 @@ export default function HomePage() {
             </div>
           )}
 
+          {/* ── History ── */}
           {mode === "history" && (
             <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.04em", color: C.t2, ...CSS.font }}>
-                  Recent checks
-                </span>
+                <div>
+                  <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.04em", color: C.t2, ...CSS.font }}>
+                    Your recent checks
+                  </span>
+                  {userId && (
+                    <div style={{ fontSize: "9px", color: C.t3, marginTop: "2px", letterSpacing: "0.04em", ...CSS.font }}>
+                      private · stored by device ID
+                    </div>
+                  )}
+                </div>
                 <div style={{ display: "flex", gap: "3px" }}>
                   <button onClick={() => void loadHistory()} style={ghostBtn()}>
                     {histLoad ? <Spinner size={10} /> : "Refresh"}
@@ -841,8 +967,8 @@ export default function HomePage() {
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             <TonLogo size={11} />
-            <span style={{ fontSize: "10px", color: C.t3, ...CSS.font }}>Unofficial tool * Not affiliated with Telegram or Fragment</span>
-            <span style={{ color: C.t3, fontSize: "10px" }}>*</span>
+            <span style={{ fontSize: "10px", color: C.t3, ...CSS.font }}>Unofficial tool · Not affiliated with Telegram or Fragment</span>
+            <span style={{ color: C.t3, fontSize: "10px" }}>·</span>
             <a
               href="https://fragment.com"
               target="_blank" rel="noopener noreferrer"

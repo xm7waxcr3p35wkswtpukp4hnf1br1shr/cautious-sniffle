@@ -61,7 +61,13 @@ const STATUS_ORDER = ["Available", "For Sale", "Reserved", "Sold", "Taken", "Unk
 const ALPHA  = "abcdefghijklmnopqrstuvwxyz".split("");
 const DIGITS = "0123456789".split("");
 
-const PAGE_SIZE = 200;
+// Highlighted / "hot" letters for sweep modes
+// suffix (word + X): s is the most popular, also x, z, y, 0-9
+const SUFFIX_HOT = new Set(["s", "x", "z", "y", "0", "1", "2", "3"]);
+// prefix (X + word): i (iXxx), my, the-style → i, o, e, a, u are common English prefixes
+const PREFIX_HOT = new Set(["i", "e", "o", "a", "m", "t"]);
+
+const PAGE_SIZE = 100; // parser page size
 
 function getOrCreateUserId(): string {
   try {
@@ -425,6 +431,76 @@ function SegmentedControl<T extends string>({
   );
 }
 
+// Sweep variant grid with highlighted "hot" letters
+function SweepVariantGrid({
+  base,
+  mode,
+  results,
+}: {
+  base: string;
+  mode: SweepMode;
+  results: CheckResult[];
+}) {
+  const chars = mode === "digit-suffix" ? DIGITS : ALPHA;
+  const hotSet = mode === "alpha-prefix" ? PREFIX_HOT : SUFFIX_HOT;
+
+  // Build a map username -> result for quick lookup
+  const byUsername = new Map(results.map(r => [r.username, r]));
+
+  return (
+    <div style={{ marginBottom: "14px" }}>
+      <div style={{ fontSize: "9px", fontWeight: 700, color: C.t2, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "8px", ...CSS.font }}>
+        {mode === "digit-suffix" ? "Digit variants 0–9" : mode === "alpha-prefix" ? "Letter variants a–z (prefix)" : "Letter variants a–z (suffix)"}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+        {chars.map(c => {
+          const username = mode === "alpha-prefix" ? `${c}${base}` : `${base}${c}`;
+          const r = byUsername.get(username);
+          const cfg = r ? getS(r.status) : null;
+          const isHot = hotSet.has(c);
+          return (
+            <a
+              key={c}
+              href={`https://fragment.com/username/${username}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`@${username}${r ? ` · ${r.status}` : ""}`}
+              style={{
+                display: "inline-flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "44px",
+                padding: "5px 4px 4px",
+                background: cfg ? cfg.bg : C.bg2,
+                border: `0.5px solid ${isHot ? "rgba(0,152,234,0.45)" : cfg ? cfg.border : C.line}`,
+                borderRadius: "2px",
+                textDecoration: "none",
+                transition: "all 100ms ease",
+                position: "relative",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = C.bg3; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = cfg ? cfg.bg : C.bg2; }}
+            >
+              {isHot && (
+                <span style={{
+                  position: "absolute", top: "2px", right: "3px",
+                  width: "4px", height: "4px", borderRadius: "50%",
+                  background: C.ton, opacity: 0.8,
+                }} />
+              )}
+              <span style={{ fontSize: "12px", fontWeight: 700, color: cfg ? cfg.color : C.t2, ...CSS.font }}>{c}</span>
+              <span style={{ fontSize: "9px", color: cfg ? cfg.color : C.t3, opacity: 0.8, marginTop: "1px", ...CSS.font }}>
+                {r ? r.status.slice(0, 4) : "···"}
+              </span>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function HomePage() {
   const userIdRef = useRef<string>("");
@@ -448,11 +524,10 @@ export default function HomePage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Parser state
-  // allWords holds the full list loaded from URL, seenIndices tracks which pages were already shown
-  const allWordsRef    = useRef<string[]>([]);   // full deduplicated word list from server
-  const shownIndices   = useRef<Set<number>>(new Set()); // which word indices have been shown already
+  const allWordsRef    = useRef<string[]>([]);
+  const shownIndices   = useRef<Set<number>>(new Set());
 
-  const [parserList, setParserList]         = useState<string[]>([]);   // current page being shown
+  const [parserList, setParserList]         = useState<string[]>([]);
   const [parserChecked, setParserChecked]   = useState<CheckResult[]>([]);
   const [parserSort, setParserSort]         = useState<Sort>("none");
   const [parserChecking, setParserChecking] = useState(false);
@@ -463,6 +538,9 @@ export default function HomePage() {
   const [wordListFetching, setWordListFetching] = useState(false);
   const [wordListError, setWordListError]       = useState<string | null>(null);
   const [wordListInfo, setWordListInfo]         = useState<string | null>(null);
+
+  // Progress tracking for batch
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
     const uid = getOrCreateUserId();
@@ -504,6 +582,7 @@ export default function HomePage() {
     setResult(null); setBatchRes([]); setSweepRes([]);
     setParserList([]); setParserChecked([]); setError(null);
     setWordListError(null); setWordListInfo(null);
+    setBatchProgress(null);
   };
 
   const checkSingle = useCallback(async () => {
@@ -521,22 +600,34 @@ export default function HomePage() {
     finally { setLoading(false); }
   }, [input, loadHistory, authHeaders]);
 
+  // Batch: send in chunks of 200 to show progress for large lists
   const checkBatch = useCallback(async () => {
     const lines = batchInput.split(/[\n,;]+/).map(s => s.trim().replace(/^@/, "").toLowerCase()).filter(Boolean);
     if (!lines.length) return;
-    if (lines.length > 200) { setError("Max 200 usernames."); return; }
+    if (lines.length > 1000) { setError("Max 1000 usernames."); return; }
     setLoading(true); setError(null); setBatchRes([]); setBatchSort("none");
+    setBatchProgress({ done: 0, total: lines.length });
+
+    const CHUNK = 200;
+    const allResults: CheckResult[] = [];
+
     try {
-      const res = await fetch("/api/check-username", {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ usernames: lines }),
-      });
-      const d = await res.json() as { results?: CheckResult[]; error?: string };
-      if (!res.ok) setError(d.error ?? "Something went wrong");
-      else { setBatchRes(d.results ?? []); void loadHistory(); }
+      for (let i = 0; i < lines.length; i += CHUNK) {
+        const chunk = lines.slice(i, i + CHUNK);
+        const res = await fetch("/api/check-username", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ usernames: chunk }),
+        });
+        const d = await res.json() as { results?: CheckResult[]; error?: string };
+        if (!res.ok) { setError(d.error ?? "Something went wrong"); break; }
+        allResults.push(...(d.results ?? []));
+        setBatchProgress({ done: allResults.length, total: lines.length });
+        setBatchRes([...allResults]);
+      }
+      void loadHistory();
     } catch { setError("Network error."); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setBatchProgress(null); }
   }, [batchInput, loadHistory, authHeaders]);
 
   const checkSweep = useCallback(async () => {
@@ -579,37 +670,35 @@ export default function HomePage() {
         allWordsRef.current = data.words ?? [];
         shownIndices.current = new Set();
         setWordListInfo(
-          `✓ Загружено ${data.total ?? data.words?.length ?? 0} слов · показывается по ${PAGE_SIZE} без повторений`
+          `✓ Loaded ${data.total ?? data.words?.length ?? 0} words · showing ${PAGE_SIZE} at a time without repeats`
         );
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setWordListError(`Ошибка сети: ${msg}`);
+      setWordListError(`Network error: ${msg}`);
     } finally {
       setWordListFetching(false);
     }
   }, [wordListUrl]);
 
-  // Pick next PAGE_SIZE unique words never shown before in this session
   const handleNextPage = useCallback(() => {
     const all = allWordsRef.current;
     if (!all.length) {
-      setWordListError("Сначала загрузите список слов");
+      setWordListError("Load a word list first");
       return;
     }
 
-    // Gather indices not yet shown
     const available: number[] = [];
     for (let i = 0; i < all.length; i++) {
       if (!shownIndices.current.has(i)) available.push(i);
     }
 
     if (available.length === 0) {
-      setWordListError(`Все ${all.length} слов были показаны. Загрузите новый список или перезагрузите страницу.`);
+      setWordListError(`All ${all.length} words have been shown. Load a new list or reload the page.`);
       return;
     }
 
-    // Shuffle available indices and pick PAGE_SIZE
+    // Shuffle and pick PAGE_SIZE
     for (let i = available.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [available[i], available[j]] = [available[j], available[i]];
@@ -631,18 +720,27 @@ export default function HomePage() {
     try {
       let usernames: string[];
       if (parserSweepMode !== "off") {
+        // No truncation — send all sweep variants
         usernames = parserList.flatMap(w => buildSweepCandidates(w, parserSweepMode as SweepMode));
       } else {
         usernames = parserList;
       }
-      usernames = usernames.slice(0, 200);
-      const res = await fetch("/api/check-username", {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ usernames }),
-      });
-      const d = await res.json() as { results?: CheckResult[]; error?: string };
-      if (d.results) { setParserChecked(d.results); void loadHistory(); }
+
+      // Send in chunks of 200 since backend concurrency handles the actual rate limiting
+      const CHUNK = 200;
+      const allResults: CheckResult[] = [];
+      for (let i = 0; i < usernames.length; i += CHUNK) {
+        const chunk = usernames.slice(i, i + CHUNK);
+        const res = await fetch("/api/check-username", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ usernames: chunk }),
+        });
+        const d = await res.json() as { results?: CheckResult[]; error?: string };
+        if (d.results) allResults.push(...d.results);
+      }
+      setParserChecked(allResults);
+      void loadHistory();
     } catch { /**/ }
     finally { setParserChecking(false); }
   }, [parserList, parserSweepMode, loadHistory, authHeaders]);
@@ -657,7 +755,7 @@ export default function HomePage() {
   const fmtDate = (s: string) => {
     try {
       const d = new Date(s);
-      return isNaN(d.getTime()) ? s : d.toLocaleString("ru-RU", {
+      return isNaN(d.getTime()) ? s : d.toLocaleString("en-GB", {
         timeZone: "Europe/Moscow",
         month: "short", day: "numeric",
         hour: "2-digit", minute: "2-digit",
@@ -687,6 +785,7 @@ export default function HomePage() {
     ...CSS.font,
   });
 
+  // Total sweep request count for parser (no truncation)
   const sweepRequestCount = parserSweepMode === "off"
     ? parserList.length
     : parserSweepMode === "digit-suffix"
@@ -696,6 +795,8 @@ export default function HomePage() {
   const remainingWords = allWordsRef.current.length > 0
     ? allWordsRef.current.length - shownIndices.current.size
     : 0;
+
+  const batchLineCount = batchInput.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).length;
 
   return (
     <>
@@ -881,8 +982,8 @@ export default function HomePage() {
                 }}>
                   <span style={{ fontSize: "10px", color: C.t2, letterSpacing: "0.04em", ...CSS.font }}>One username per line, or comma/semicolon separated</span>
                   <span style={{ fontSize: "11px", color: C.t1, fontWeight: 600, ...CSS.font }}>
-                    {batchInput.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).length}
-                    <span style={{ color: C.t3, fontWeight: 400 }}>/200</span>
+                    {batchLineCount}
+                    <span style={{ color: batchLineCount > 1000 ? "#f04040" : C.t3, fontWeight: 400 }}>/1000</span>
                   </span>
                 </div>
                 <textarea
@@ -904,6 +1005,28 @@ export default function HomePage() {
                   }}
                 />
               </div>
+
+              {/* Progress bar */}
+              {batchProgress && (
+                <div style={{ marginBottom: "10px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "10px", color: C.t2, ...CSS.font }}>Checking…</span>
+                    <span style={{ fontSize: "10px", color: C.t1, fontWeight: 600, ...CSS.font }}>
+                      {batchProgress.done} / {batchProgress.total}
+                    </span>
+                  </div>
+                  <div style={{ height: "2px", background: C.bg3, borderRadius: "1px", overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%",
+                      width: `${(batchProgress.done / batchProgress.total) * 100}%`,
+                      background: C.ton,
+                      borderRadius: "1px",
+                      transition: "width 300ms ease",
+                    }} />
+                  </div>
+                </div>
+              )}
+
               <div style={{ marginBottom: "18px" }}>
                 <InputRow>
                   <PrimaryBtn onClick={() => void checkBatch()} disabled={loading || !batchInput.trim()} loading={loading}>
@@ -931,7 +1054,7 @@ export default function HomePage() {
               }}>
                 {sweepMode === "digit-suffix"
                   ? <>Checks the exact username + all 10 digit variants (0–9). <span style={{ color: C.t0, fontWeight: 700 }}>11 requests total.</span></>
-                  : <>Checks the exact username + all 26 letter variants (a–z). <span style={{ color: C.t0, fontWeight: 700 }}>27 requests total.</span></>
+                  : <>Checks the exact username + all 26 letter variants (a–z). <span style={{ color: C.t0, fontWeight: 700 }}>27 requests total.</span> <span style={{ color: C.ton }}>Blue dot = commonly available suffix.</span></>
                 }
               </div>
 
@@ -958,9 +1081,9 @@ export default function HomePage() {
                   value={sweepMode}
                   onChange={v => { setSweepMode(v); setSweepRes([]); }}
                   options={[
-                    { k: "alpha-suffix", label: "username + a" },
-                    { k: "alpha-prefix", label: "a + username" },
-                    { k: "digit-suffix", label: "username + 1" },
+                    { k: "alpha-suffix", label: "word + a" },
+                    { k: "alpha-prefix", label: "a + word" },
+                    { k: "digit-suffix", label: "word + 1" },
                   ]}
                 />
               </div>
@@ -977,9 +1100,13 @@ export default function HomePage() {
                   )}
                   {sweepRes.length > 1 && (
                     <div>
-                      <div style={{ fontSize: "9px", fontWeight: 700, color: C.t2, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "5px", ...CSS.font }}>
-                        {sweepMode === "digit-suffix" ? "Digit variants 0–9" : sweepMode === "alpha-prefix" ? "Letter variants a–z (prefix)" : "Letter variants a–z"}
-                      </div>
+                      {/* Visual grid */}
+                      <SweepVariantGrid
+                        base={sweepInput.trim().replace(/^@/, "").toLowerCase()}
+                        mode={sweepMode}
+                        results={sweepRes.slice(1)}
+                      />
+                      {/* Full list */}
                       <Results results={sweepRes.slice(1)} sort={sweepSort} setSort={setSweepSort} />
                     </div>
                   )}
@@ -1002,7 +1129,7 @@ export default function HomePage() {
                 lineHeight: 1.55,
                 ...CSS.font,
               }}>
-                Загрузите список слов по ссылке (Pastebin или любой raw-текст). Каждый клик «Следующие 200» выдаёт новую порцию без повторений — даже если в списке 10&thinsp;000 слов.
+                Load a word list from a URL (Pastebin or any raw text). Each click of "Next 100" shows a new batch without repeats — works for lists with thousands of words.
               </div>
 
               {/* Word list URL */}
@@ -1018,7 +1145,7 @@ export default function HomePage() {
                   padding: "7px 13px",
                   fontSize: "10px", color: C.t3, letterSpacing: "0.06em", ...CSS.font,
                 }}>
-                  источник · pastebin / raw-ссылка
+                  source · pastebin / raw url
                 </div>
                 <div style={{ padding: "14px" }}>
                   <div style={{ display: "flex", gap: "6px" }}>
@@ -1065,7 +1192,7 @@ export default function HomePage() {
                         ...CSS.font,
                       }}
                     >
-                      {wordListFetching ? <><Spinner size={10} />Загрузка…</> : "Загрузить"}
+                      {wordListFetching ? <><Spinner size={10} />Loading…</> : "Load"}
                     </button>
                   </div>
                   {wordListError && (
@@ -1098,15 +1225,15 @@ export default function HomePage() {
                   onMouseEnter={e => { if (allWordsRef.current.length) (e.currentTarget as HTMLButtonElement).style.background = "rgba(240,240,242,0.85)"; }}
                   onMouseLeave={e => { if (allWordsRef.current.length) (e.currentTarget as HTMLButtonElement).style.background = C.t0; }}
                 >
-                  {parserList.length === 0 ? "Показать первые 200" : "Следующие 200"}
+                  {parserList.length === 0 ? "Show first 100" : "Next 100"}
                 </button>
                 {allWordsRef.current.length > 0 && (
                   <span style={{ fontSize: "11px", color: C.t2, ...CSS.font }}>
-                    осталось <span style={{ color: remainingWords === 0 ? "#f04040" : C.t0, fontWeight: 700 }}>{remainingWords}</span> из {allWordsRef.current.length}
+                    remaining <span style={{ color: remainingWords === 0 ? "#f04040" : C.t0, fontWeight: 700 }}>{remainingWords}</span> of {allWordsRef.current.length}
                   </span>
                 )}
                 {!allWordsRef.current.length && (
-                  <span style={{ fontSize: "10px", color: C.t3, ...CSS.font }}>сначала загрузите список</span>
+                  <span style={{ fontSize: "10px", color: C.t3, ...CSS.font }}>load a word list first</span>
                 )}
               </div>
 
@@ -1126,7 +1253,7 @@ export default function HomePage() {
                       padding: "7px 13px",
                       fontSize: "10px", color: C.t3, letterSpacing: "0.06em", ...CSS.font,
                     }}>
-                      режим проверки
+                      check mode
                     </div>
                     <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: "8px" }}>
                       <SegmentedControl<GenSweepMode>
@@ -1134,18 +1261,15 @@ export default function HomePage() {
                         value={parserSweepMode}
                         onChange={v => { setParserSweepMode(v); setParserChecked([]); }}
                         options={[
-                          { k: "off",          label: "Точно" },
-                          { k: "alpha-suffix", label: "слово + a–z" },
-                          { k: "alpha-prefix", label: "a–z + слово" },
-                          { k: "digit-suffix", label: "слово + 0–9" },
+                          { k: "off",          label: "Exact" },
+                          { k: "alpha-suffix", label: "word + a–z" },
+                          { k: "alpha-prefix", label: "a–z + word" },
+                          { k: "digit-suffix", label: "word + 0–9" },
                         ]}
                       />
                       {parserSweepMode !== "off" && (
                         <div style={{ fontSize: "10px", color: C.t2, ...CSS.font }}>
-                          {sweepRequestCount} запросов
-                          {sweepRequestCount > 200 && (
-                            <span style={{ color: "#e8a030", marginLeft: "6px" }}>· обрезается до 200</span>
-                          )}
+                          {sweepRequestCount} requests total · sent in batches of 200
                         </div>
                       )}
                     </div>
@@ -1154,7 +1278,7 @@ export default function HomePage() {
                   {/* Action bar */}
                   <div style={{ display: "flex", gap: "5px", marginBottom: "10px", flexWrap: "wrap" }}>
                     <button onClick={handleCopyParsed} style={ghostBtn(false, parserCopied)}>
-                      {parserCopied ? "✓ Скопировано" : "Скопировать"}
+                      {parserCopied ? "✓ Copied" : "Copy"}
                     </button>
                     <button
                       onClick={() => void handleCheckParsed()}
@@ -1167,10 +1291,10 @@ export default function HomePage() {
                         cursor: parserChecking ? "not-allowed" : "pointer",
                       }}
                     >
-                      {parserChecking ? <><Spinner size={10} />Проверка…</> : "Проверить доступность"}
+                      {parserChecking ? <><Spinner size={10} />Checking…</> : "Check availability"}
                     </button>
                     <span style={{ fontSize: "11px", color: C.t2, display: "flex", alignItems: "center", marginLeft: "4px", ...CSS.font }}>
-                      {parserList.length} слов
+                      {parserList.length} words
                     </span>
                   </div>
 
@@ -1214,7 +1338,7 @@ export default function HomePage() {
                   background: C.bg1,
                   ...CSS.font,
                 }}>
-                  Загрузите список слов по ссылке, чтобы начать
+                  Load a word list from a URL to get started
                 </div>
               )}
             </div>
@@ -1230,7 +1354,7 @@ export default function HomePage() {
                   </span>
                   {userIdDisplay && (
                     <div style={{ fontSize: "9px", color: C.t3, marginTop: "2px", letterSpacing: "0.04em", ...CSS.font }}>
-                      private · stored by device ID
+                      private · stored by device ID · times in MSK
                     </div>
                   )}
                 </div>

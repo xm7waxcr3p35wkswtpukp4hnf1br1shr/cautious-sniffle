@@ -75,70 +75,16 @@ function getOrCreateUserId(): string {
   }
 }
 
-// ── Fallback word list (used when no URL is provided or fetch fails) ──────────
-const FALLBACK_WORDS: string[] = [
-  "able","acid","aged","also","area","army","away","baby","back","ball",
-  "band","bank","base","bath","bear","beat","been","bell","best","bird",
-  "bite","blow","blue","boat","body","bold","bone","book","born","both",
-  "bowl","brave","brew","bridge","brief","bring","broad","broke","brown",
-  "burn","busy","calm","camp","card","care","case","cash","cast","cave",
-  "cell","chat","chef","chip","city","clan","clay","clip","club","clue",
-  "coal","coat","code","coin","cold","come","cool","cope","copy","core",
-  "corn","cost","cozy","crew","crop","crow","cure","cute","dark","data",
-  "dawn","dead","deal","dean","dear","deck","deep","deer","desk","dial",
-  "dice","diet","dirt","disk","dive","dock","dome","door","dove","down",
-  "draw","drop","drum","dual","duke","dull","dusk","dust","duty","each",
-  "earn","easy","edge","epic","even","ever","evil","exam","face","fact",
-  "fair","fall","fame","farm","fast","fate","feat","feed","feel","feet",
-  "fell","felt","file","fill","film","find","fire","firm","fish","fist",
-  "flag","flat","flaw","flee","flew","flip","flow","foam","fold","folk",
-  "fond","font","food","fool","ford","fork","form","fort","foul","free",
-  "from","fuel","full","fund","fury","fuse","gain","gale","game","gate",
-  "gave","gaze","gear","give","glad","glow","glue","goal","gold","gone",
-  "good","grab","gray","grid","grin","grip","grow","gulf","gust","half",
-  "hall","hand","hang","hard","harm","hash","hate","have","hawk","haze",
-  "head","heal","heap","heat","heel","help","hero","hide","high","hill",
-  "hint","hold","hole","holy","home","hook","hope","horn","host","huge",
-  "hull","hunt","hurt","icon","idea","idle","inch","iron","isle","jade",
-  "join","jump","just","keen","keep","kind","king","kite","knew","knot",
-  "lake","lamp","land","lane","lark","last","late","lead","leaf","lean",
-  "left","lens","life","lift","like","lime","line","link","lion","list",
-  "live","load","lock","loft","lone","long","look","lord","lore","lost",
-  "loud","love","luck","made","main","make","male","mall","many","mare",
-  "mark","mars","mask","mass","mast","mate","maze","meal","mean","meat",
-  "meet","melt","menu","mesh","mild","mile","milk","mill","mind","mint",
-  "miss","mist","mode","moon","more","moss","most","move","much","mule",
-  "myth","nail","name","neat","need","nest","news","next","nice","nook",
-  "norm","note","oath","once","open","oven","over","page","pale","palm",
-  "park","part","pass","past","path","peak","pear","peer","pick","pier",
-  "pine","pink","pipe","plan","play","plot","plow","plug","plus","poem",
-  "poet","poll","pond","pool","port","post","prey","pull","pure","push",
-  "quit","race","rain","rake","rank","rare","read","real","reed","reef",
-  "rent","rest","rice","rich","ride","ring","ripe","rise","risk","road",
-  "roam","roar","rock","role","roll","roof","root","rope","rose","ruin",
-  "rule","rush","safe","sage","sail","sake","sale","salt","same","sand",
-  "sane","save","scan","seal","seed","seek","seen","self","send","shed",
-  "ship","shop","show","side","silk","site","size","skin","skip","slim",
-  "slip","slow","snow","soap","soft","soil","sole","some","song","soon",
-  "sort","soul","soup","sour","span","spin","spot","star","stay","stem",
-  "step","stir","stop","store","storm","straw","stream","street","strip",
-  "strong","surge","swap","swift","swim","tale","tall","task","team","tear",
-  "tell","text","than","that","them","then","they","thin","this","tide",
-  "tile","time","tiny","tire","toad","told","toll","tone","took","tool",
-  "town","trek","trim","trio","trip","trod","true","tube","tune","turf",
-  "turn","twin","type","unit","upon","used","user","vale","vast","view",
-  "vine","void","vote","wade","wake","walk","wall","warm","warp","wave",
-  "wear","weed","well","west","wild","will","wind","wine","wing","wire",
-  "wise","wish","with","wolf","wood","word","work","worn","wren","yard",
-  "year","your","zeal","zero","zone",
-];
-
-// Session-level used-words tracker
+// Session-level used-words tracker (persists across Generate clicks so no repeats)
 const _usedWords = new Set<string>();
 
 function pickWordsFromList(list: string[], count: number): string[] {
-  if (_usedWords.size + count > list.length) _usedWords.clear();
   const available = list.filter(w => !_usedWords.has(w));
+  if (available.length === 0) {
+    // All words exhausted — reset and start over
+    _usedWords.clear();
+    return pickWordsFromList(list, count);
+  }
   const pool = [...available];
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -545,20 +491,18 @@ export default function HomePage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Generator state
-  const [genCountInput, setGenCountInput] = useState("20");
-  const [genCountError, setGenCountError] = useState<string | null>(null);
-  const [genList, setGenList]             = useState<string[]>([]);
-  const [genChecked, setGenChecked]       = useState<CheckResult[]>([]);
-  const [genSort, setGenSort]             = useState<Sort>("none");
-  const [genChecking, setGenChecking]     = useState(false);
-  const [genCopied, setGenCopied]         = useState(false);
-  const [genSweepMode, setGenSweepMode]   = useState<GenSweepMode>("off");
+  const [genList, setGenList]         = useState<string[]>([]);
+  const [genChecked, setGenChecked]   = useState<CheckResult[]>([]);
+  const [genSort, setGenSort]         = useState<Sort>("none");
+  const [genChecking, setGenChecking] = useState(false);
+  const [genCopied, setGenCopied]     = useState(false);
+  const [genSweepMode, setGenSweepMode] = useState<GenSweepMode>("off");
 
   // Word list URL (Pastebin or any raw text URL)
-  const [wordListUrl, setWordListUrl]       = useState("");
+  const [wordListUrl, setWordListUrl]           = useState("");
   const [wordListFetching, setWordListFetching] = useState(false);
-  const [wordListError, setWordListError]   = useState<string | null>(null);
-  const [wordListInfo, setWordListInfo]     = useState<string | null>(null);
+  const [wordListError, setWordListError]       = useState<string | null>(null);
+  const [wordListInfo, setWordListInfo]         = useState<string | null>(null);
   // Cached remote word list
   const remoteWordsRef = useRef<string[] | null>(null);
 
@@ -601,7 +545,7 @@ export default function HomePage() {
   const resetState = () => {
     setResult(null); setBatchRes([]); setSweepRes([]);
     setGenList([]); setGenChecked([]); setError(null);
-    setGenCountError(null); setWordListError(null); setWordListInfo(null);
+    setWordListError(null); setWordListInfo(null);
   };
 
   const checkSingle = useCallback(async () => {
@@ -663,6 +607,7 @@ export default function HomePage() {
     setWordListError(null);
     setWordListInfo(null);
     remoteWordsRef.current = null;
+    _usedWords.clear(); // reset used tracker when loading new list
     const { words, error: err } = await fetchWordList(wordListUrl.trim());
     if (err) {
       setWordListError(err);
@@ -676,22 +621,15 @@ export default function HomePage() {
   // ── Generator actions ──────────────────────────────────────────────────────
 
   const handleGenerate = useCallback(() => {
-    setGenCountError(null);
-    const raw = parseInt(genCountInput);
-    if (isNaN(raw) || raw < 1) {
-      setGenCountError("Enter a number between 1 and 200");
+    if (!remoteWordsRef.current) {
+      setWordListError("Load a word list from Pastebin first");
       return;
     }
-    if (raw > 200) {
-      setGenCountError("Cannot generate more than 200 usernames at once");
-      return;
-    }
-    const wordPool = remoteWordsRef.current ?? FALLBACK_WORDS;
-    const list = pickWordsFromList(wordPool, raw);
+    const list = pickWordsFromList(remoteWordsRef.current, 200);
     setGenList(list);
     setGenChecked([]);
     setGenSort("none");
-  }, [genCountInput]);
+  }, []);
 
   const handleCheckGenerated = useCallback(async () => {
     if (!genList.length) return;
@@ -1064,7 +1002,7 @@ export default function HomePage() {
                 lineHeight: 1.55,
                 ...CSS.font,
               }}>
-                Generates real English words as Telegram username candidates. Optionally load your own word list from a URL (Pastebin, raw gist, etc.).
+                Load a word list from Pastebin (or any raw text URL), then generate up to 200 unique candidates per batch. Already-shown words are skipped automatically.
               </div>
 
               {/* Controls */}
@@ -1080,14 +1018,14 @@ export default function HomePage() {
                   padding: "7px 13px",
                   fontSize: "10px", color: C.t3, letterSpacing: "0.06em", ...CSS.font,
                 }}>
-                  generator settings
+                  word list source
                 </div>
                 <div style={{ padding: "16px 14px", display: "flex", flexDirection: "column", gap: "14px" }}>
 
                   {/* Word list URL */}
                   <div>
                     <div style={{ fontSize: "10px", color: C.t2, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "6px", ...CSS.font }}>
-                      Word list URL <span style={{ color: C.t3, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional · Pastebin, raw text)</span>
+                      Pastebin / raw text URL
                     </div>
                     <div style={{ display: "flex", gap: "6px" }}>
                       <input
@@ -1140,64 +1078,36 @@ export default function HomePage() {
                     {wordListInfo && (
                       <div style={{ fontSize: "11px", color: "#35c96b", marginTop: "5px", ...CSS.font }}>{wordListInfo}</div>
                     )}
-                    {!wordListUrl.trim() && (
-                      <div style={{ fontSize: "10px", color: C.t3, marginTop: "4px", ...CSS.font }}>
-                        Leave empty to use the built-in English word list
-                      </div>
-                    )}
                   </div>
 
-                  {/* Count + Generate button */}
-                  <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "flex-end" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                      <span style={{ fontSize: "10px", color: C.t2, letterSpacing: "0.07em", textTransform: "uppercase", ...CSS.font }}>Count</span>
-                      <input
-                        type="text"
-                        value={genCountInput}
-                        onChange={e => { setGenCountInput(e.target.value.replace(/\D/g, "")); setGenCountError(null); }}
-                        placeholder="20"
-                        style={{
-                          background: C.bg2,
-                          border: `0.5px solid ${genCountError ? "rgba(240,64,64,0.4)" : C.line}`,
-                          borderRadius: "2px",
-                          padding: "7px 10px",
-                          color: C.t0,
-                          fontSize: "13px",
-                          fontWeight: 600,
-                          outline: "none",
-                          width: "80px",
-                          ...CSS.font,
-                        }}
-                      />
-                      {genCountError ? (
-                        <span style={{ fontSize: "9px", color: "#f04040", ...CSS.font }}>{genCountError}</span>
-                      ) : (
-                        <span style={{ fontSize: "9px", color: C.t3, ...CSS.font }}>max 200</span>
-                      )}
-                    </div>
-
-                    <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", paddingBottom: genCountError ? "18px" : "18px" }}>
-                      <button
-                        onClick={handleGenerate}
-                        style={{
-                          background: C.t0,
-                          color: C.bg0,
-                          border: "none",
-                          borderRadius: "2px",
-                          padding: "8px 18px",
-                          fontSize: "12px",
-                          fontWeight: 700,
-                          letterSpacing: "0.05em",
-                          cursor: "pointer",
-                          transition: "background 120ms ease",
-                          ...CSS.font,
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(240,240,242,0.85)"; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.t0; }}
-                      >
-                        Generate
-                      </button>
-                    </div>
+                  {/* Generate button */}
+                  <div>
+                    <button
+                      onClick={handleGenerate}
+                      disabled={!remoteWordsRef.current}
+                      style={{
+                        background: remoteWordsRef.current ? C.t0 : "rgba(240,240,242,0.05)",
+                        color: remoteWordsRef.current ? C.bg0 : C.t3,
+                        border: "none",
+                        borderRadius: "2px",
+                        padding: "9px 20px",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        letterSpacing: "0.05em",
+                        cursor: remoteWordsRef.current ? "pointer" : "not-allowed",
+                        transition: "background 120ms ease",
+                        ...CSS.font,
+                      }}
+                      onMouseEnter={e => { if (remoteWordsRef.current) (e.currentTarget as HTMLButtonElement).style.background = "rgba(240,240,242,0.85)"; }}
+                      onMouseLeave={e => { if (remoteWordsRef.current) (e.currentTarget as HTMLButtonElement).style.background = C.t0; }}
+                    >
+                      Generate 200
+                    </button>
+                    {!remoteWordsRef.current && (
+                      <span style={{ fontSize: "10px", color: C.t3, marginLeft: "10px", ...CSS.font }}>
+                        load a word list first
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1262,9 +1172,11 @@ export default function HomePage() {
                       {genChecking ? <><Spinner size={10} />Checking…</> : "Check availability"}
                     </button>
                     <span style={{ fontSize: "11px", color: C.t2, display: "flex", alignItems: "center", marginLeft: "4px", ...CSS.font }}>
-                      {genList.length} words
+                      {genList.length} words · from URL
                       {remoteWordsRef.current && (
-                        <span style={{ color: C.ton, marginLeft: "6px" }}>· from URL</span>
+                        <span style={{ color: C.t3, marginLeft: "6px" }}>
+                          · {remoteWordsRef.current.length - _usedWords.size} remaining
+                        </span>
                       )}
                     </span>
                   </div>
@@ -1309,7 +1221,9 @@ export default function HomePage() {
                   background: C.bg1,
                   ...CSS.font,
                 }}>
-                  Enter a count and click Generate
+                  {remoteWordsRef.current
+                    ? "Click Generate 200 to pick a fresh batch"
+                    : "Load a word list from Pastebin to get started"}
                 </div>
               )}
             </div>

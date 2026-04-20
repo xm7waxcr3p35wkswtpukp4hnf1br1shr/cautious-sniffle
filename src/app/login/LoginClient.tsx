@@ -54,50 +54,40 @@ function Spinner({ size = 14 }: { size?: number }) {
   );
 }
 
-export default function LoginPage() {
+export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const from = searchParams.get("from") ?? "/";
 
-  const [apiKey, setApiKey]     = useState("");
-  const [showKey, setShowKey]   = useState(false);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
-  const [success, setSuccess]   = useState(false);
-  const [focused, setFocused]   = useState(false);
-  const [mounted, setMounted]   = useState(false);
+  const [apiKey, setApiKey]   = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
   const handleLogin = async () => {
     const key = apiKey.trim();
     if (!key || loading) return;
-
     setLoading(true);
     setError(null);
-
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ apiKey: key }),
       });
-
-      const data = (await res.json()) as { ok?: boolean; error?: string; label?: string };
-
+      const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) {
         setError(data.error ?? "Authentication failed");
         setLoading(false);
         return;
       }
-
       setSuccess(true);
-      setTimeout(() => {
-        router.push(from);
-        router.refresh();
-      }, 600);
+      setTimeout(() => { router.push(from); router.refresh(); }, 600);
     } catch {
       setError("Network error. Try again.");
       setLoading(false);
@@ -112,10 +102,6 @@ export default function LoginPage() {
           from { opacity: 0; transform: translateY(6px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes blink {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: 0; }
-        }
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; background: ${C.bg0}; }
         input::placeholder { color: ${C.t2}; }
@@ -125,86 +111,43 @@ export default function LoginPage() {
         :focus-visible { outline: 1px solid ${C.ton}; outline-offset: 2px; }
       `}</style>
 
-      <div
-        style={{
-          minHeight: "100vh",
-          background: C.bg0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "24px",
-          fontFamily: "var(--font-mono)",
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
-        {/* Background grid */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundImage: `
-              linear-gradient(${C.line} 1px, transparent 1px),
-              linear-gradient(90deg, ${C.line} 1px, transparent 1px)
-            `,
-            backgroundSize: "40px 40px",
-            opacity: 0.5,
-            pointerEvents: "none",
-          }}
-        />
+      <div style={{
+        minHeight: "100vh", background: C.bg0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "24px", fontFamily: "var(--font-mono)",
+        position: "relative", overflow: "hidden",
+      }}>
+        {/* Grid */}
+        <div style={{
+          position: "absolute", inset: 0,
+          backgroundImage: `linear-gradient(${C.line} 1px, transparent 1px), linear-gradient(90deg, ${C.line} 1px, transparent 1px)`,
+          backgroundSize: "40px 40px", opacity: 0.5, pointerEvents: "none",
+        }} />
+        {/* Glow */}
+        <div style={{
+          position: "absolute", top: "30%", left: "50%",
+          transform: "translate(-50%, -50%)", width: "500px", height: "300px",
+          background: "radial-gradient(ellipse at center, rgba(0,152,234,0.06) 0%, transparent 70%)",
+          pointerEvents: "none",
+        }} />
 
-        {/* Glow blob */}
-        <div
-          style={{
-            position: "absolute",
-            top: "30%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "500px",
-            height: "300px",
-            background: "radial-gradient(ellipse at center, rgba(0,152,234,0.06) 0%, transparent 70%)",
-            pointerEvents: "none",
-          }}
-        />
-
-        {/* Card */}
-        <div
-          style={{
-            position: "relative",
-            width: "100%",
-            maxWidth: "380px",
-            animation: mounted ? "fadeUp 0.25s ease forwards" : "none",
-            opacity: mounted ? 1 : 0,
-          }}
-        >
+        <div style={{
+          position: "relative", width: "100%", maxWidth: "380px",
+          animation: mounted ? "fadeUp 0.25s ease forwards" : "none",
+          opacity: mounted ? 1 : 0,
+        }}>
           {/* Header */}
           <div style={{ marginBottom: "28px", textAlign: "center" }}>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px" }}>
-              <div
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: "4px",
-                  background: C.bg2,
-                  border: `0.5px solid ${C.lineHi}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
+              <div style={{
+                width: 44, height: 44, borderRadius: "4px",
+                background: C.bg2, border: `0.5px solid ${C.lineHi}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
                 <TonLogo size={22} />
               </div>
             </div>
-            <h1
-              style={{
-                fontSize: "18px",
-                fontWeight: 700,
-                color: C.t0,
-                margin: "0 0 6px",
-                letterSpacing: "-0.01em",
-                ...MONO,
-              }}
-            >
+            <h1 style={{ fontSize: "18px", fontWeight: 700, color: C.t0, margin: "0 0 6px", letterSpacing: "-0.01em", ...MONO }}>
               Username Tool
             </h1>
             <p style={{ fontSize: "11px", color: C.t2, margin: 0, letterSpacing: "0.03em", ...MONO }}>
@@ -212,176 +155,95 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Form card */}
-          <div
-            style={{
-              background: C.bg1,
-              border: `0.5px solid ${C.line}`,
-              borderRadius: "4px",
-              overflow: "hidden",
-            }}
-          >
+          {/* Card */}
+          <div style={{ background: C.bg1, border: `0.5px solid ${C.line}`, borderRadius: "4px", overflow: "hidden" }}>
             {/* Top bar */}
-            <div
-              style={{
-                background: C.bg2,
-                borderBottom: `0.5px solid ${C.line}`,
-                padding: "8px 14px",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              {["#f04040", "#e8a030", "#35c96b"].map((c) => (
-                <div
-                  key={c}
-                  style={{ width: 7, height: 7, borderRadius: "50%", background: c, opacity: 0.7 }}
-                />
+            <div style={{
+              background: C.bg2, borderBottom: `0.5px solid ${C.line}`,
+              padding: "8px 14px", display: "flex", alignItems: "center", gap: "6px",
+            }}>
+              {["#f04040","#e8a030","#35c96b"].map(c => (
+                <div key={c} style={{ width: 7, height: 7, borderRadius: "50%", background: c, opacity: 0.7 }} />
               ))}
-              <span
-                style={{
-                  fontSize: "10px",
-                  color: C.t3,
-                  marginLeft: "6px",
-                  letterSpacing: "0.06em",
-                  ...MONO,
-                }}
-              >
+              <span style={{ fontSize: "10px", color: C.t3, marginLeft: "6px", letterSpacing: "0.06em", ...MONO }}>
                 auth · api key
               </span>
             </div>
 
             <div style={{ padding: "20px 18px 18px" }}>
-              {/* Error */}
               {error && (
-                <div
-                  style={{
-                    padding: "8px 11px",
-                    background: "rgba(240,64,64,0.07)",
-                    border: "0.5px solid rgba(240,64,64,0.28)",
-                    borderRadius: "2px",
-                    color: C.red,
-                    fontSize: "11px",
-                    marginBottom: "14px",
-                    display: "flex",
-                    gap: "7px",
-                    alignItems: "flex-start",
-                    animation: "fadeUp 0.15s ease forwards",
-                    ...MONO,
-                  }}
-                >
+                <div style={{
+                  padding: "8px 11px", background: "rgba(240,64,64,0.07)",
+                  border: "0.5px solid rgba(240,64,64,0.28)", borderRadius: "2px",
+                  color: C.red, fontSize: "11px", marginBottom: "14px",
+                  display: "flex", gap: "7px", alignItems: "flex-start",
+                  animation: "fadeUp 0.15s ease forwards", ...MONO,
+                }}>
                   <span style={{ flexShrink: 0 }}>✕</span>
                   <span>{error}</span>
                 </div>
               )}
-
-              {/* Success */}
               {success && (
-                <div
-                  style={{
-                    padding: "8px 11px",
-                    background: "rgba(53,201,107,0.07)",
-                    border: "0.5px solid rgba(53,201,107,0.28)",
-                    borderRadius: "2px",
-                    color: C.green,
-                    fontSize: "11px",
-                    marginBottom: "14px",
-                    display: "flex",
-                    gap: "7px",
-                    alignItems: "center",
-                    animation: "fadeUp 0.15s ease forwards",
-                    ...MONO,
-                  }}
-                >
-                  <span>✓</span>
-                  <span>Authenticated · redirecting…</span>
+                <div style={{
+                  padding: "8px 11px", background: "rgba(53,201,107,0.07)",
+                  border: "0.5px solid rgba(53,201,107,0.28)", borderRadius: "2px",
+                  color: C.green, fontSize: "11px", marginBottom: "14px",
+                  display: "flex", gap: "7px", alignItems: "center",
+                  animation: "fadeUp 0.15s ease forwards", ...MONO,
+                }}>
+                  <span>✓</span><span>Authenticated · redirecting…</span>
                 </div>
               )}
 
-              {/* Input label */}
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "10px",
-                  color: C.t2,
-                  letterSpacing: "0.08em",
-                  marginBottom: "6px",
-                  textTransform: "uppercase",
-                  ...MONO,
-                }}
-              >
+              <label style={{
+                display: "block", fontSize: "10px", color: C.t2,
+                letterSpacing: "0.08em", marginBottom: "6px",
+                textTransform: "uppercase", ...MONO,
+              }}>
                 API Key
               </label>
 
-              {/* Input wrapper */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  background: C.bg2,
-                  border: `0.5px solid ${focused ? C.lineHi : C.line}`,
-                  borderRadius: "2px",
-                  overflow: "hidden",
-                  transition: "border-color 120ms ease",
-                  marginBottom: "12px",
-                }}
-              >
-                {/* Key icon */}
+              <div style={{
+                display: "flex", alignItems: "center",
+                background: C.bg2,
+                border: `0.5px solid ${focused ? C.lineHi : C.line}`,
+                borderRadius: "2px", overflow: "hidden",
+                transition: "border-color 120ms ease", marginBottom: "12px",
+              }}>
                 <div style={{ padding: "0 0 0 12px", color: C.t2, flexShrink: 0 }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
+                    <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"
+                      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </div>
-
                 <input
                   type={showKey ? "text" : "password"}
                   value={apiKey}
-                  onChange={(e) => { setApiKey(e.target.value); setError(null); }}
+                  onChange={e => { setApiKey(e.target.value); setError(null); }}
                   onFocus={() => setFocused(true)}
                   onBlur={() => setFocused(false)}
-                  onKeyDown={(e) => { if (e.key === "Enter") void handleLogin(); }}
+                  onKeyDown={e => { if (e.key === "Enter") void handleLogin(); }}
                   placeholder="sk-••••••••••••••••••••••••••••••••"
                   autoComplete="current-password"
                   spellCheck={false}
                   style={{
-                    flex: 1,
-                    background: "transparent",
-                    border: "none",
-                    outline: "none",
-                    color: C.t0,
-                    fontSize: "13px",
-                    padding: "10px 10px",
-                    ...MONO,
+                    flex: 1, background: "transparent", border: "none", outline: "none",
+                    color: C.t0, fontSize: "13px", padding: "10px 10px", ...MONO,
                     letterSpacing: showKey ? "normal" : "0.05em",
                   }}
                 />
-
-                {/* Toggle visibility */}
                 <button
-                  onClick={() => setShowKey((v) => !v)}
+                  onClick={() => setShowKey(v => !v)}
                   style={{
-                    background: "transparent",
-                    border: "none",
+                    background: "transparent", border: "none",
                     borderLeft: `0.5px solid ${C.line}`,
-                    padding: "0 12px",
-                    height: "100%",
-                    minHeight: "40px",
-                    color: C.t2,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    transition: "color 100ms ease",
-                    flexShrink: 0,
+                    padding: "0 12px", height: "100%", minHeight: "40px",
+                    color: C.t2, cursor: "pointer",
+                    display: "flex", alignItems: "center",
+                    transition: "color 100ms ease", flexShrink: 0,
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = C.t0)}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = C.t2)}
-                  title={showKey ? "Hide" : "Show"}
+                  onMouseEnter={e => (e.currentTarget.style.color = C.t0)}
+                  onMouseLeave={e => (e.currentTarget.style.color = C.t2)}
                 >
                   {showKey ? (
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
@@ -397,78 +259,34 @@ export default function LoginPage() {
                 </button>
               </div>
 
-              {/* Submit */}
               <button
                 onClick={() => void handleLogin()}
                 disabled={loading || !apiKey.trim() || success}
                 style={{
-                  width: "100%",
-                  padding: "11px",
-                  background:
-                    loading || !apiKey.trim() || success
-                      ? "rgba(240,240,242,0.06)"
-                      : C.t0,
-                  color:
-                    loading || !apiKey.trim() || success ? C.t3 : C.bg0,
-                  border: "none",
-                  borderRadius: "2px",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  letterSpacing: "0.06em",
+                  width: "100%", padding: "11px",
+                  background: loading || !apiKey.trim() || success ? "rgba(240,240,242,0.06)" : C.t0,
+                  color: loading || !apiKey.trim() || success ? C.t3 : C.bg0,
+                  border: "none", borderRadius: "2px",
+                  fontSize: "12px", fontWeight: 700, letterSpacing: "0.06em",
                   cursor: loading || !apiKey.trim() || success ? "not-allowed" : "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
-                  transition: "background 120ms ease, color 120ms ease",
-                  ...MONO,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                  transition: "background 120ms ease, color 120ms ease", ...MONO,
                 }}
-                onMouseEnter={(e) => {
-                  if (!loading && apiKey.trim() && !success)
-                    (e.currentTarget as HTMLButtonElement).style.background = "rgba(240,240,242,0.87)";
-                }}
-                onMouseLeave={(e) => {
-                  if (!loading && apiKey.trim() && !success)
-                    (e.currentTarget as HTMLButtonElement).style.background = C.t0;
-                }}
+                onMouseEnter={e => { if (!loading && apiKey.trim() && !success) (e.currentTarget as HTMLButtonElement).style.background = "rgba(240,240,242,0.87)"; }}
+                onMouseLeave={e => { if (!loading && apiKey.trim() && !success) (e.currentTarget as HTMLButtonElement).style.background = C.t0; }}
               >
-                {loading ? (
-                  <>
-                    <Spinner size={12} />
-                    Verifying…
-                  </>
-                ) : success ? (
-                  "✓ Authenticated"
-                ) : (
-                  "Sign in"
-                )}
+                {loading ? <><Spinner size={12} />Verifying…</> : success ? "✓ Authenticated" : "Sign in"}
               </button>
             </div>
 
-            {/* Footer hint */}
-            <div
-              style={{
-                padding: "8px 18px 10px",
-                borderTop: `0.5px solid ${C.line}`,
-                background: C.bg2,
-              }}
-            >
+            <div style={{ padding: "8px 18px 10px", borderTop: `0.5px solid ${C.line}`, background: C.bg2 }}>
               <p style={{ fontSize: "10px", color: C.t3, margin: 0, ...MONO }}>
                 Keys are stored in Supabase · contact admin for access
               </p>
             </div>
           </div>
 
-          {/* Bottom label */}
-          <p
-            style={{
-              textAlign: "center",
-              fontSize: "10px",
-              color: C.t3,
-              marginTop: "18px",
-              ...MONO,
-            }}
-          >
+          <p style={{ textAlign: "center", fontSize: "10px", color: C.t3, marginTop: "18px", ...MONO }}>
             Unofficial tool · Not affiliated with Telegram or Fragment
           </p>
         </div>

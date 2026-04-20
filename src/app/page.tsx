@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 
-/* ── Types ─────────────────────────────────────────────── */
 type CheckResult = {
   username: string;
   status: "Available" | "Taken" | "For Sale" | "Sold" | "Reserved" | "Unknown" | "Invalid" | string;
@@ -25,22 +24,10 @@ type HistoryItem = {
 
 type Sort = "none" | "az" | "za" | "group";
 
-/* ── Fragment-style design tokens ───────────────────────── */
-// Light theme inspired by fragment.dev
-// --main:    255 255 255  (white)
-// --main-100: 246 246 244 (off-white)
-// --main-200: 230 228 224 (light grey border)
-// --main-300: 200 198 193 (medium grey border)
-// --main-500: 140 136 128 (muted text)
-// --main-800: 30  28  24  (near-black)
-// --negative: 18  17  14  (true dark, for dark sections)
-// Accent: #FF4900 (orange), #A53DE7 (purple), #0735F5 (blue), #2D9B5A (green)
-
 const CSS = {
   font: { fontFamily: "var(--font-mono)" } as React.CSSProperties,
 };
 
-/* ── Status config ──────────────────────────────────────── */
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; border: string; dot: string }> = {
   Available:  { label: "Available", color: "#2D9B5A", bg: "rgba(45,155,90,0.08)",   border: "rgba(45,155,90,0.3)",  dot: "#2D9B5A" },
   Taken:      { label: "Taken",     color: "#CC2200", bg: "rgba(204,34,0,0.07)",    border: "rgba(204,34,0,0.25)",  dot: "#FF4900" },
@@ -55,8 +42,6 @@ const getS = (s: string) =>
 
 const STATUS_ORDER = ["Available", "For Sale", "Reserved", "Sold", "Taken", "Unknown", "Invalid"];
 const ALPHA = "abcdefghijklmnopqrstuvwxyz".split("");
-
-/* ── Sub-components ─────────────────────────────────────── */
 
 function StatusPill({ status }: { status: string }) {
   const cfg = getS(status);
@@ -222,7 +207,7 @@ function SortBar({ sort, setSort }: { sort: Sort; setSort: (s: Sort) => void }) 
       <span style={{ fontSize: "10px", color: "rgba(30,28,24,0.4)", marginRight: "4px", letterSpacing: "0.06em", ...CSS.font }}>Sort</span>
       {opts.map(({ k, label }) => (
         <button key={k} onClick={() => setSort(k)} style={{
-          background: sort === k ? "rgb(246,246,244)" : "transparent",
+          background: sort === k ? "rgb(240,238,234)" : "transparent",
           border: `0.5px solid ${sort === k ? "rgba(30,28,24,0.25)" : "rgba(30,28,24,0.12)"}`,
           borderRadius: "2px",
           padding: "2px 8px",
@@ -274,7 +259,6 @@ function Results({ results, sort, setSort }: { results: CheckResult[]; sort: Sor
     <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
       <StatsPills results={results} />
       <SortBar sort={sort} setSort={setSort} />
-
       {sort === "group" && grouped ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {grouped.map(g => (
@@ -295,7 +279,6 @@ function Results({ results, sort, setSort }: { results: CheckResult[]; sort: Sor
   );
 }
 
-/* ── Shared input components ─────────────────────────────── */
 function InputRow({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   const [focused, setFocused] = useState(false);
   return (
@@ -329,9 +312,7 @@ const TEXT_INPUT: React.CSSProperties = {
   fontFamily: "var(--font-mono)",
 };
 
-function PrimaryBtn({
-  onClick, disabled, loading, children,
-}: {
+function PrimaryBtn({ onClick, disabled, loading, children }: {
   onClick: () => void;
   disabled: boolean;
   loading?: boolean;
@@ -368,7 +349,6 @@ function PrimaryBtn({
   );
 }
 
-/* ── Main page ───────────────────────────────────────────── */
 export default function HomePage() {
   const [input, setInput]           = useState("");
   const [batchInput, setBatchInput] = useState("");
@@ -475,415 +455,388 @@ export default function HomePage() {
   });
 
   return (
-    <div style={{ minHeight: "100vh", background: "rgb(246,246,244)", color: "rgb(30,28,24)", display: "flex", flexDirection: "column" }}>
-
-      {/* ── Main ── */}
-      <main style={{ maxWidth: "620px", width: "100%", margin: "0 auto", padding: "32px 24px 80px", flex: 1 }}>
-
-        {/* Page header */}
-        <div style={{ marginBottom: "24px", paddingBottom: "20px", borderBottom: "0.5px solid rgba(30,28,24,0.1)" }}>
-          <h1 style={{ fontSize: "18px", fontWeight: 700, margin: "0 0 5px", letterSpacing: "-0.01em", color: "rgb(30,28,24)", ...CSS.font }}>
-            Username Tool
-          </h1>
-          <p style={{ fontSize: "12px", color: "rgba(30,28,24,0.45)", margin: 0, ...CSS.font }}>
-            Search Fragment for available Telegram usernames. Real-time availability data.
-          </p>
-        </div>
-
-        {/* ── Tabs ── */}
-        <div style={{ display: "flex", borderBottom: "0.5px solid rgba(30,28,24,0.12)", marginBottom: "24px", gap: "0" }}>
-          {TABS.map(({ key, label }) => {
-            const active = mode === key;
-            return (
-              <button key={key}
-                onClick={() => { setMode(key); resetState(); if (key === "history") void loadHistory(); }}
-                style={{
-                  padding: "7px 14px",
-                  border: "none",
-                  borderBottom: `1.5px solid ${active ? "rgb(30,28,24)" : "transparent"}`,
-                  background: "transparent",
-                  color: active ? "rgb(30,28,24)" : "rgba(30,28,24,0.4)",
-                  fontWeight: active ? 700 : 400,
-                  fontSize: "12px",
-                  letterSpacing: "0.04em",
-                  cursor: "pointer",
-                  marginBottom: "-0.5px",
-                  transition: "color 100ms ease, border-color 100ms ease",
-                  ...CSS.font,
-                }}
-              >{label}</button>
-            );
-          })}
-        </div>
-
-        {/* ── ERROR banner ── */}
-        {error && (
-          <div style={{
-            padding: "9px 12px",
-            border: "0.5px solid rgba(204,34,0,0.3)",
-            background: "rgba(204,34,0,0.06)",
-            borderRadius: "2px",
-            color: "#CC2200",
-            fontSize: "12px",
-            marginBottom: "14px",
-            display: "flex", alignItems: "flex-start", gap: "8px",
-            animation: "fadeUp 0.15s ease forwards",
-            ...CSS.font,
-          }}>
-            <span style={{ flexShrink: 0, marginTop: "1px" }}>✕</span>
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* ══ SINGLE ══ */}
-        {mode === "single" && (
-          <div>
-            <InputRow style={{ marginBottom: "5px" }}>
-              <span style={{ padding: "0 4px 0 13px", color: "rgba(30,28,24,0.3)", fontSize: "15px", userSelect: "none", flexShrink: 0, ...CSS.font }}>@</span>
-              <input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={e => { setInput(e.target.value); setResult(null); setError(null); }}
-                onKeyDown={e => { if (e.key === "Enter") void checkSingle(); }}
-                placeholder="username"
-                autoFocus
-                autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
-                style={TEXT_INPUT}
-              />
-              <PrimaryBtn onClick={() => void checkSingle()} disabled={loading || !input.trim()} loading={loading}>
-                {loading ? "Checking" : "Check"}
-              </PrimaryBtn>
-            </InputRow>
-            <p style={{ fontSize: "10px", color: "rgba(30,28,24,0.35)", marginBottom: "24px", marginTop: "4px", ...CSS.font }}>
-              3–32 chars * letters, numbers, underscores * press Enter
-            </p>
-
-            {result && !error && (
-              <div style={{ border: "0.5px solid rgba(30,28,24,0.15)", borderRadius: "2px", overflow: "hidden", background: "white", animation: "fadeUp 0.15s ease forwards" }}>
-                {/* Card header */}
-                <div style={{
-                  padding: "8px 13px",
-                  background: "rgb(246,246,244)",
-                  borderBottom: "0.5px solid rgba(30,28,24,0.1)",
-                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
-                }}>
-                  <span style={{ fontSize: "10px", color: "rgba(30,28,24,0.4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...CSS.font }}>
-                    fragment.com/username/{result.username}
-                  </span>
-                  <StatusPill status={result.status} />
-                </div>
-
-                {/* Card body */}
-                <div style={{ padding: "14px 13px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "11px", marginBottom: "14px" }}>
-                    <Avatar username={result.username} photo={result.photo} size={40} />
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                        <span style={{ fontSize: "15px", fontWeight: 700, color: "rgb(30,28,24)", ...CSS.font }}>@{result.username}</span>
-                        {result.hasPremium && <PremiumStar />}
-                      </div>
-                      {result.name && (
-                        <div style={{ fontSize: "12px", color: "rgba(30,28,24,0.45)", marginTop: "2px", ...CSS.font }}>{result.name}</div>
-                      )}
-                      {result.status === "Reserved" && (
-                        <div style={{ fontSize: "11px", color: "#0735F5", marginTop: "4px", ...CSS.font }}>
-                          Reserved by Telegram * cannot be registered
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
-                    {[
-                      { href: `https://fragment.com/username/${result.username}`, label: "View on Fragment", icon: <TonLogo size={11} /> },
-                      { href: `https://t.me/${result.username}`, label: "Open in Telegram", icon: null },
-                    ].map(({ href, label, icon }) => (
-                      <a key={href} href={href} target="_blank" rel="noopener noreferrer"
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: "5px",
-                          padding: "5px 10px",
-                          border: "0.5px solid rgba(30,28,24,0.18)",
-                          borderRadius: "2px",
-                          background: "rgb(246,246,244)",
-                          color: "rgb(30,28,24)",
-                          textDecoration: "none",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          transition: "background 100ms ease, border-color 100ms ease",
-                          ...CSS.font,
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.background = "rgba(30,28,24,0.06)"; e.currentTarget.style.borderColor = "rgba(30,28,24,0.3)"; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = "rgb(246,246,244)"; e.currentTarget.style.borderColor = "rgba(30,28,24,0.18)"; }}
-                      >
-                        {icon}{label}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-
-                {result.source && (
-                  <div style={{ padding: "5px 13px", borderTop: "0.5px solid rgba(30,28,24,0.08)", background: "rgb(246,246,244)", fontSize: "10px", color: "rgba(30,28,24,0.35)", ...CSS.font }}>
-                    source: {result.source}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ══ BATCH ══ */}
-        {mode === "batch" && (
-          <div>
-            <div style={{ border: "0.5px solid rgba(30,28,24,0.15)", borderRadius: "2px", overflow: "hidden", marginBottom: "10px", background: "white" }}>
-              <div style={{
-                padding: "6px 12px",
-                background: "rgb(246,246,244)",
-                borderBottom: "0.5px solid rgba(30,28,24,0.1)",
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-              }}>
-                <span style={{ fontSize: "10px", color: "rgba(30,28,24,0.45)", letterSpacing: "0.04em", ...CSS.font }}>Single? Only Batch.</span>
-                <span style={{ fontSize: "11px", color: "rgba(30,28,24,0.6)", fontWeight: 600, ...CSS.font }}>
-                  {batchInput.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).length}
-                  <span style={{ color: "rgba(30,28,24,0.3)", fontWeight: 400 }}>/200</span>
-                </span>
-              </div>
-              <textarea
-                value={batchInput}
-                onChange={e => { setBatchInput(e.target.value); setError(null); setBatchRes([]); }}
-                placeholder={"username1\nusername2\nusername3"}
-                rows={8}
-                style={{
-                  width: "100%",
-                  background: "white",
-                  border: "none", outline: "none",
-                  color: "rgb(30,28,24)",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  padding: "10px 12px",
-                  resize: "vertical",
-                  lineHeight: 1.7,
-                  ...CSS.font,
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "18px" }}>
-              <InputRow>
-                <PrimaryBtn onClick={() => void checkBatch()} disabled={loading || !batchInput.trim()} loading={loading}>
-                  {loading ? "Checking…" : "Check all"}
-                </PrimaryBtn>
-              </InputRow>
-            </div>
-
-            {batchRes.length > 0 && <Results results={batchRes} sort={batchSort} setSort={setBatchSort} />}
-          </div>
-        )}
-
-        {/* ══ SWEEP ══ */}
-        {mode === "sweep" && (
-          <div>
-            {/* Info box */}
-            <div style={{
-              padding: "9px 12px",
-              background: "rgba(7,53,245,0.05)",
-              border: "0.5px solid rgba(7,53,245,0.2)",
-              borderRadius: "2px",
-              fontSize: "12px",
-              color: "rgba(30,28,24,0.6)",
-              marginBottom: "18px",
-              lineHeight: 1.55,
-              ...CSS.font,
-            }}>
-              Checks the exact username + all 26 letter variants (a–z appended or prepended).{" "}
-              <span style={{ color: "rgb(30,28,24)", fontWeight: 700 }}>27 requests total.</span>
-            </div>
-
-            <InputRow style={{ marginBottom: "9px" }}>
-              <span style={{ padding: "0 4px 0 13px", color: "rgba(30,28,24,0.3)", fontSize: "15px", userSelect: "none", flexShrink: 0, ...CSS.font }}>@</span>
-              <input
-                type="text"
-                value={sweepInput}
-                onChange={e => { setSweepInput(e.target.value); setError(null); setSweepRes([]); }}
-                onKeyDown={e => { if (e.key === "Enter") void checkSweep(); }}
-                placeholder="username"
-                autoFocus
-                autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
-                style={TEXT_INPUT}
-              />
-              <PrimaryBtn onClick={() => void checkSweep()} disabled={loading || !sweepInput.trim()} loading={loading}>
-                {loading ? "Sweeping…" : "Sweep"}
-              </PrimaryBtn>
-            </InputRow>
-
-            {/* Prefix / suffix toggle */}
-            <div style={{ display: "flex", gap: "3px", alignItems: "center", marginBottom: "14px" }}>
-              <span style={{ fontSize: "10px", color: "rgba(30,28,24,0.4)", letterSpacing: "0.05em", marginRight: "5px", ...CSS.font }}>Mode</span>
-              {(["suffix", "prefix"] as const).map(k => (
-                <button key={k} onClick={() => setSweepPos(k)} style={{
-                  background: sweepPos === k ? "rgb(246,246,244)" : "transparent",
-                  border: `0.5px solid ${sweepPos === k ? "rgba(30,28,24,0.25)" : "rgba(30,28,24,0.12)"}`,
-                  borderRadius: "2px",
-                  padding: "3px 9px",
-                  color: sweepPos === k ? "rgb(30,28,24)" : "rgba(30,28,24,0.4)",
-                  fontSize: "11px",
-                  fontWeight: sweepPos === k ? 700 : 400,
-                  cursor: "pointer",
-                  transition: "all 100ms ease",
-                  ...CSS.font,
-                }}>
-                  {k === "suffix" ? "username + a" : "a + username"}
-                </button>
-              ))}
-            </div>
-
-            {/* Preview chips */}
-            {sweepInput.trim() && (
-              <div style={{ display: "flex", gap: "3px", flexWrap: "wrap", marginBottom: "18px" }}>
-                {[sweepInput.trim().toLowerCase(), ...ALPHA.slice(0, 5).map(l => sweepPos === "suffix" ? `${sweepInput.trim().toLowerCase()}${l}` : `${l}${sweepInput.trim().toLowerCase()}`)].map((u, i) => (
-                  <span key={i} style={{
-                    background: i === 0 ? "rgb(30,28,24)" : "rgb(246,246,244)",
-                    border: `0.5px solid ${i === 0 ? "rgb(30,28,24)" : "rgba(30,28,24,0.15)"}`,
-                    borderRadius: "2px",
-                    padding: "2px 7px",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    color: i === 0 ? "white" : "rgba(30,28,24,0.6)",
-                    ...CSS.font,
-                  }}>{u}</span>
-                ))}
-                <span style={{ fontSize: "11px", color: "rgba(30,28,24,0.35)", alignSelf: "center", ...CSS.font }}>+{26 - 5} more</span>
-              </div>
-            )}
-
-            {sweepRes.length > 0 && (
-              <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
-                {sweepRes[0] && (
-                  <div style={{ marginBottom: "14px" }}>
-                    <div style={{ fontSize: "9px", fontWeight: 700, color: "rgba(30,28,24,0.4)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "5px", ...CSS.font }}>Original</div>
-                    <div style={{ border: "0.5px solid rgba(7,53,245,0.25)", borderRadius: "2px", overflow: "hidden", background: "white" }}>
-                      <ResultRow r={sweepRes[0]} last />
-                    </div>
-                  </div>
-                )}
-                {sweepRes.length > 1 && (
-                  <div>
-                    <div style={{ fontSize: "9px", fontWeight: 700, color: "rgba(30,28,24,0.4)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "5px", ...CSS.font }}>Letter variants a–z</div>
-                    <Results results={sweepRes.slice(1)} sort={sweepSort} setSort={setSweepSort} />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ══ HISTORY ══ */}
-        {mode === "history" && (
-          <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-              <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.04em", color: "rgba(30,28,24,0.5)", ...CSS.font }}>
-                Recent checks
-              </span>
-              <div style={{ display: "flex", gap: "3px" }}>
-                <button onClick={() => void loadHistory()} style={ghostBtn()}>
-                  {histLoad ? <Spinner size={10} /> : "Refresh"}
-                </button>
-                {history.length > 0 && (
-                  <button onClick={() => void clearHistory()} style={ghostBtn(true, clearOk)}>
-                    {clearOk ? "Confirm?" : "Clear"}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {history.length === 0 ? (
-              <div style={{
-                padding: "40px 16px",
-                textAlign: "center",
-                border: "0.5px solid rgba(30,28,24,0.12)",
-                borderRadius: "2px",
-                color: "rgba(30,28,24,0.35)",
-                fontSize: "12px",
-                background: "white",
-                ...CSS.font,
-              }}>
-                No checks yet.
-              </div>
-            ) : (
-              <div style={{ border: "0.5px solid rgba(30,28,24,0.15)", borderRadius: "2px", overflow: "hidden", background: "white" }}>
-                {history.map((item, i) => (
-                  <div key={item.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "24px 1fr auto 14px",
-                      alignItems: "center",
-                      padding: "8px 13px",
-                      gap: "10px",
-                      ...(i < history.length - 1 ? ROW_BORDER : {}),
-                      transition: "background 100ms ease",
-                    }}
-                    onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.background = "rgba(30,28,24,0.03)")}
-                    onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
-                  >
-                    <Avatar username={item.username} size={22} />
-                    <div>
-                      <div style={{ fontSize: "13px", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px", color: "rgb(30,28,24)", ...CSS.font }}>
-                        @{item.username}{item.hasPremium === "true" && <PremiumStar />}
-                      </div>
-                      <div style={{ fontSize: "10px", color: "rgba(30,28,24,0.35)", ...CSS.font }}>{fmtDate(item.checkedAt)}</div>
-                    </div>
-                    <StatusPill status={item.status} />
-                    <ExtLink href={`https://fragment.com/username/${item.username}`} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </main>
-
-      {/* ── Footer ── */}
-      <footer style={{
-        borderTop: "0.5px solid rgba(30,28,24,0.12)",
-        padding: "10px 24px",
-        background: "white",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-          <TonLogo size={11} />
-          <span style={{ fontSize: "10px", color: "rgba(30,28,24,0.35)", ...CSS.font }}>Unofficial tool * Not affiliated with Telegram or Fragment</span>
-          <span style={{ color: "rgba(30,28,24,0.2)", fontSize: "10px" }}>*</span>
-          <a
-            href="https://fragment.com"
-            target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: "10px", color: "rgba(30,28,24,0.45)", textDecoration: "none", transition: "color 100ms ease", ...CSS.font }}
-            onMouseEnter={e => (e.currentTarget.style.color = "rgb(30,28,24)")}
-            onMouseLeave={e => (e.currentTarget.style.color = "rgba(30,28,24,0.45)")}
-          >
-            fragment.com
-          </a>
-        </div>
-      </footer>
-
+    <>
       <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(4px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
+        html { zoom: 1.2; background: rgb(242,240,237) !important; }
+        body { background: rgb(242,240,237) !important; color: rgb(30,28,24) !important; }
+        body::before { display: none !important; }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
         .animate-spin { animation: spin 0.7s linear infinite; }
-        @keyframes pulse-dot {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
+        @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
         * { box-sizing: border-box; }
         textarea { box-sizing: border-box; }
         ::selection { background: rgba(7,53,245,0.12); }
-        ::-webkit-scrollbar { width: 3px; height: 3px; }
+        ::-webkit-scrollbar { width:3px; height:3px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(30,28,24,0.2); border-radius: 0; }
+        ::-webkit-scrollbar-thumb { background: rgba(30,28,24,0.2); border-radius:0; }
       `}</style>
-    </div>
+
+      <div style={{ minHeight: "100vh", background: "rgb(242,240,237)", color: "rgb(30,28,24)", display: "flex", flexDirection: "column" }}>
+
+        <main style={{ maxWidth: "620px", width: "100%", margin: "0 auto", padding: "32px 24px 80px", flex: 1 }}>
+
+          <div style={{ marginBottom: "24px", paddingBottom: "20px", borderBottom: "0.5px solid rgba(30,28,24,0.1)" }}>
+            <h1 style={{ fontSize: "18px", fontWeight: 700, margin: "0 0 5px", letterSpacing: "-0.01em", color: "rgb(30,28,24)", ...CSS.font }}>
+              Username Tool
+            </h1>
+            <p style={{ fontSize: "12px", color: "rgba(30,28,24,0.45)", margin: 0, ...CSS.font }}>
+              Search Fragment for available Telegram usernames. Real-time availability data.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", borderBottom: "0.5px solid rgba(30,28,24,0.12)", marginBottom: "24px" }}>
+            {TABS.map(({ key, label }) => {
+              const active = mode === key;
+              return (
+                <button key={key}
+                  onClick={() => { setMode(key); resetState(); if (key === "history") void loadHistory(); }}
+                  style={{
+                    padding: "7px 14px",
+                    border: "none",
+                    borderBottom: `1.5px solid ${active ? "rgb(30,28,24)" : "transparent"}`,
+                    background: "transparent",
+                    color: active ? "rgb(30,28,24)" : "rgba(30,28,24,0.4)",
+                    fontWeight: active ? 700 : 400,
+                    fontSize: "12px",
+                    letterSpacing: "0.04em",
+                    cursor: "pointer",
+                    marginBottom: "-0.5px",
+                    transition: "color 100ms ease, border-color 100ms ease",
+                    ...CSS.font,
+                  }}
+                >{label}</button>
+              );
+            })}
+          </div>
+
+          {error && (
+            <div style={{
+              padding: "9px 12px",
+              border: "0.5px solid rgba(204,34,0,0.3)",
+              background: "rgba(204,34,0,0.06)",
+              borderRadius: "2px",
+              color: "#CC2200",
+              fontSize: "12px",
+              marginBottom: "14px",
+              display: "flex", alignItems: "flex-start", gap: "8px",
+              animation: "fadeUp 0.15s ease forwards",
+              ...CSS.font,
+            }}>
+              <span style={{ flexShrink: 0, marginTop: "1px" }}>✕</span>
+              <span>{error}</span>
+            </div>
+          )}
+
+          {mode === "single" && (
+            <div>
+              <InputRow style={{ marginBottom: "5px" }}>
+                <span style={{ padding: "0 4px 0 13px", color: "rgba(30,28,24,0.3)", fontSize: "15px", userSelect: "none", flexShrink: 0, ...CSS.font }}>@</span>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={input}
+                  onChange={e => { setInput(e.target.value); setResult(null); setError(null); }}
+                  onKeyDown={e => { if (e.key === "Enter") void checkSingle(); }}
+                  placeholder="username"
+                  autoFocus
+                  autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
+                  style={TEXT_INPUT}
+                />
+                <PrimaryBtn onClick={() => void checkSingle()} disabled={loading || !input.trim()} loading={loading}>
+                  {loading ? "Checking" : "Check"}
+                </PrimaryBtn>
+              </InputRow>
+              <p style={{ fontSize: "10px", color: "rgba(30,28,24,0.35)", marginBottom: "24px", marginTop: "4px", ...CSS.font }}>
+                3–32 chars * letters, numbers, underscores * press Enter
+              </p>
+
+              {result && !error && (
+                <div style={{ border: "0.5px solid rgba(30,28,24,0.15)", borderRadius: "2px", overflow: "hidden", background: "white", animation: "fadeUp 0.15s ease forwards" }}>
+                  <div style={{
+                    padding: "8px 13px",
+                    background: "rgb(246,246,244)",
+                    borderBottom: "0.5px solid rgba(30,28,24,0.1)",
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
+                  }}>
+                    <span style={{ fontSize: "10px", color: "rgba(30,28,24,0.4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...CSS.font }}>
+                      fragment.com/username/{result.username}
+                    </span>
+                    <StatusPill status={result.status} />
+                  </div>
+                  <div style={{ padding: "14px 13px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "11px", marginBottom: "14px" }}>
+                      <Avatar username={result.username} photo={result.photo} size={40} />
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                          <span style={{ fontSize: "15px", fontWeight: 700, color: "rgb(30,28,24)", ...CSS.font }}>@{result.username}</span>
+                          {result.hasPremium && <PremiumStar />}
+                        </div>
+                        {result.name && (
+                          <div style={{ fontSize: "12px", color: "rgba(30,28,24,0.45)", marginTop: "2px", ...CSS.font }}>{result.name}</div>
+                        )}
+                        {result.status === "Reserved" && (
+                          <div style={{ fontSize: "11px", color: "#0735F5", marginTop: "4px", ...CSS.font }}>
+                            Reserved by Telegram * cannot be registered
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
+                      {[
+                        { href: `https://fragment.com/username/${result.username}`, label: "View on Fragment", icon: <TonLogo size={11} /> },
+                        { href: `https://t.me/${result.username}`, label: "Open in Telegram", icon: null },
+                      ].map(({ href, label, icon }) => (
+                        <a key={href} href={href} target="_blank" rel="noopener noreferrer"
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: "5px",
+                            padding: "5px 10px",
+                            border: "0.5px solid rgba(30,28,24,0.18)",
+                            borderRadius: "2px",
+                            background: "rgb(246,246,244)",
+                            color: "rgb(30,28,24)",
+                            textDecoration: "none",
+                            fontSize: "11px",
+                            fontWeight: 600,
+                            transition: "background 100ms ease, border-color 100ms ease",
+                            ...CSS.font,
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = "rgba(30,28,24,0.06)"; e.currentTarget.style.borderColor = "rgba(30,28,24,0.3)"; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = "rgb(246,246,244)"; e.currentTarget.style.borderColor = "rgba(30,28,24,0.18)"; }}
+                        >
+                          {icon}{label}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                  {result.source && (
+                    <div style={{ padding: "5px 13px", borderTop: "0.5px solid rgba(30,28,24,0.08)", background: "rgb(246,246,244)", fontSize: "10px", color: "rgba(30,28,24,0.35)", ...CSS.font }}>
+                      source: {result.source}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {mode === "batch" && (
+            <div>
+              <div style={{ border: "0.5px solid rgba(30,28,24,0.15)", borderRadius: "2px", overflow: "hidden", marginBottom: "10px", background: "white" }}>
+                <div style={{
+                  padding: "6px 12px",
+                  background: "rgb(246,246,244)",
+                  borderBottom: "0.5px solid rgba(30,28,24,0.1)",
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                }}>
+                  <span style={{ fontSize: "10px", color: "rgba(30,28,24,0.45)", letterSpacing: "0.04em", ...CSS.font }}>Single? Only Batch.</span>
+                  <span style={{ fontSize: "11px", color: "rgba(30,28,24,0.6)", fontWeight: 600, ...CSS.font }}>
+                    {batchInput.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).length}
+                    <span style={{ color: "rgba(30,28,24,0.3)", fontWeight: 400 }}>/200</span>
+                  </span>
+                </div>
+                <textarea
+                  value={batchInput}
+                  onChange={e => { setBatchInput(e.target.value); setError(null); setBatchRes([]); }}
+                  placeholder={"username1\nusername2\nusername3"}
+                  rows={8}
+                  style={{
+                    width: "100%",
+                    background: "white",
+                    border: "none", outline: "none",
+                    color: "rgb(30,28,24)",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    padding: "10px 12px",
+                    resize: "vertical",
+                    lineHeight: 1.7,
+                    ...CSS.font,
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: "18px" }}>
+                <InputRow>
+                  <PrimaryBtn onClick={() => void checkBatch()} disabled={loading || !batchInput.trim()} loading={loading}>
+                    {loading ? "Checking…" : "Check all"}
+                  </PrimaryBtn>
+                </InputRow>
+              </div>
+              {batchRes.length > 0 && <Results results={batchRes} sort={batchSort} setSort={setBatchSort} />}
+            </div>
+          )}
+
+          {mode === "sweep" && (
+            <div>
+              <div style={{
+                padding: "9px 12px",
+                background: "rgba(7,53,245,0.05)",
+                border: "0.5px solid rgba(7,53,245,0.2)",
+                borderRadius: "2px",
+                fontSize: "12px",
+                color: "rgba(30,28,24,0.6)",
+                marginBottom: "18px",
+                lineHeight: 1.55,
+                ...CSS.font,
+              }}>
+                Checks the exact username + all 26 letter variants (a–z appended or prepended).{" "}
+                <span style={{ color: "rgb(30,28,24)", fontWeight: 700 }}>27 requests total.</span>
+              </div>
+              <InputRow style={{ marginBottom: "9px" }}>
+                <span style={{ padding: "0 4px 0 13px", color: "rgba(30,28,24,0.3)", fontSize: "15px", userSelect: "none", flexShrink: 0, ...CSS.font }}>@</span>
+                <input
+                  type="text"
+                  value={sweepInput}
+                  onChange={e => { setSweepInput(e.target.value); setError(null); setSweepRes([]); }}
+                  onKeyDown={e => { if (e.key === "Enter") void checkSweep(); }}
+                  placeholder="username"
+                  autoFocus
+                  autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
+                  style={TEXT_INPUT}
+                />
+                <PrimaryBtn onClick={() => void checkSweep()} disabled={loading || !sweepInput.trim()} loading={loading}>
+                  {loading ? "Sweeping…" : "Sweep"}
+                </PrimaryBtn>
+              </InputRow>
+              <div style={{ display: "flex", gap: "3px", alignItems: "center", marginBottom: "14px" }}>
+                <span style={{ fontSize: "10px", color: "rgba(30,28,24,0.4)", letterSpacing: "0.05em", marginRight: "5px", ...CSS.font }}>Mode</span>
+                {(["suffix", "prefix"] as const).map(k => (
+                  <button key={k} onClick={() => setSweepPos(k)} style={{
+                    background: sweepPos === k ? "rgb(240,238,234)" : "transparent",
+                    border: `0.5px solid ${sweepPos === k ? "rgba(30,28,24,0.25)" : "rgba(30,28,24,0.12)"}`,
+                    borderRadius: "2px",
+                    padding: "3px 9px",
+                    color: sweepPos === k ? "rgb(30,28,24)" : "rgba(30,28,24,0.4)",
+                    fontSize: "11px",
+                    fontWeight: sweepPos === k ? 700 : 400,
+                    cursor: "pointer",
+                    transition: "all 100ms ease",
+                    ...CSS.font,
+                  }}>
+                    {k === "suffix" ? "username + a" : "a + username"}
+                  </button>
+                ))}
+              </div>
+              {sweepInput.trim() && (
+                <div style={{ display: "flex", gap: "3px", flexWrap: "wrap", marginBottom: "18px" }}>
+                  {[sweepInput.trim().toLowerCase(), ...ALPHA.slice(0, 5).map(l => sweepPos === "suffix" ? `${sweepInput.trim().toLowerCase()}${l}` : `${l}${sweepInput.trim().toLowerCase()}`)].map((u, i) => (
+                    <span key={i} style={{
+                      background: i === 0 ? "rgb(30,28,24)" : "rgb(240,238,234)",
+                      border: `0.5px solid ${i === 0 ? "rgb(30,28,24)" : "rgba(30,28,24,0.15)"}`,
+                      borderRadius: "2px",
+                      padding: "2px 7px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: i === 0 ? "white" : "rgba(30,28,24,0.6)",
+                      ...CSS.font,
+                    }}>{u}</span>
+                  ))}
+                  <span style={{ fontSize: "11px", color: "rgba(30,28,24,0.35)", alignSelf: "center", ...CSS.font }}>+{26 - 5} more</span>
+                </div>
+              )}
+              {sweepRes.length > 0 && (
+                <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
+                  {sweepRes[0] && (
+                    <div style={{ marginBottom: "14px" }}>
+                      <div style={{ fontSize: "9px", fontWeight: 700, color: "rgba(30,28,24,0.4)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "5px", ...CSS.font }}>Original</div>
+                      <div style={{ border: "0.5px solid rgba(7,53,245,0.25)", borderRadius: "2px", overflow: "hidden", background: "white" }}>
+                        <ResultRow r={sweepRes[0]} last />
+                      </div>
+                    </div>
+                  )}
+                  {sweepRes.length > 1 && (
+                    <div>
+                      <div style={{ fontSize: "9px", fontWeight: 700, color: "rgba(30,28,24,0.4)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "5px", ...CSS.font }}>Letter variants a–z</div>
+                      <Results results={sweepRes.slice(1)} sort={sweepSort} setSort={setSweepSort} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {mode === "history" && (
+            <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.04em", color: "rgba(30,28,24,0.5)", ...CSS.font }}>
+                  Recent checks
+                </span>
+                <div style={{ display: "flex", gap: "3px" }}>
+                  <button onClick={() => void loadHistory()} style={ghostBtn()}>
+                    {histLoad ? <Spinner size={10} /> : "Refresh"}
+                  </button>
+                  {history.length > 0 && (
+                    <button onClick={() => void clearHistory()} style={ghostBtn(true, clearOk)}>
+                      {clearOk ? "Confirm?" : "Clear"}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {history.length === 0 ? (
+                <div style={{
+                  padding: "40px 16px",
+                  textAlign: "center",
+                  border: "0.5px solid rgba(30,28,24,0.12)",
+                  borderRadius: "2px",
+                  color: "rgba(30,28,24,0.35)",
+                  fontSize: "12px",
+                  background: "white",
+                  ...CSS.font,
+                }}>
+                  No checks yet.
+                </div>
+              ) : (
+                <div style={{ border: "0.5px solid rgba(30,28,24,0.15)", borderRadius: "2px", overflow: "hidden", background: "white" }}>
+                  {history.map((item, i) => (
+                    <div key={item.id}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "24px 1fr auto 14px",
+                        alignItems: "center",
+                        padding: "8px 13px",
+                        gap: "10px",
+                        ...(i < history.length - 1 ? ROW_BORDER : {}),
+                        transition: "background 100ms ease",
+                      }}
+                      onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.background = "rgba(30,28,24,0.03)")}
+                      onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
+                    >
+                      <Avatar username={item.username} size={22} />
+                      <div>
+                        <div style={{ fontSize: "13px", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px", color: "rgb(30,28,24)", ...CSS.font }}>
+                          @{item.username}{item.hasPremium === "true" && <PremiumStar />}
+                        </div>
+                        <div style={{ fontSize: "10px", color: "rgba(30,28,24,0.35)", ...CSS.font }}>{fmtDate(item.checkedAt)}</div>
+                      </div>
+                      <StatusPill status={item.status} />
+                      <ExtLink href={`https://fragment.com/username/${item.username}`} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </main>
+
+        <footer style={{
+          borderTop: "0.5px solid rgba(30,28,24,0.12)",
+          padding: "10px 24px",
+          background: "white",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <TonLogo size={11} />
+            <span style={{ fontSize: "10px", color: "rgba(30,28,24,0.35)", ...CSS.font }}>Unofficial tool * Not affiliated with Telegram or Fragment</span>
+            <span style={{ color: "rgba(30,28,24,0.2)", fontSize: "10px" }}>*</span>
+            <a
+              href="https://fragment.com"
+              target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: "10px", color: "rgba(30,28,24,0.45)", textDecoration: "none", transition: "color 100ms ease", ...CSS.font }}
+              onMouseEnter={e => (e.currentTarget.style.color = "rgb(30,28,24)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(30,28,24,0.45)")}
+            >
+              fragment.com
+            </a>
+          </div>
+        </footer>
+      </div>
+    </>
   );
 }

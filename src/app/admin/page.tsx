@@ -26,7 +26,7 @@ function fmt(s: string | null) {
   if (!s) return "—";
   try {
     const d = new Date(s);
-    return isNaN(d.getTime()) ? s : d.toLocaleString("ru-RU", {
+    return isNaN(d.getTime()) ? s : d.toLocaleString("en-GB", {
       timeZone: "Europe/Moscow",
       day: "2-digit", month: "short", year: "numeric",
       hour: "2-digit", minute: "2-digit",
@@ -216,7 +216,7 @@ export default function AdminPage() {
               <h1 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.01em", color: C.t0, ...F }}>
                 Admin Panel
               </h1>
-              <p style={{ fontSize: "11px", color: C.t2, margin: 0, ...F }}>API key management</p>
+              <p style={{ fontSize: "11px", color: C.t2, margin: 0, ...F }}>API key management · times shown in MSK</p>
             </div>
             <div style={{ display: "flex", gap: "6px" }}>
               <a href="/" style={{
@@ -276,7 +276,7 @@ export default function AdminPage() {
                 </div>
                 {rawKey && (
                   <div style={{ fontSize: "10px", color: C.t3, marginTop: "4px", ...F }}>
-                    ⚠ Save this key — it won't be shown again after creation
+                    ⚠ Save this key — it won&apos;t be shown again after creation
                   </div>
                 )}
               </div>
@@ -354,8 +354,8 @@ export default function AdminPage() {
                   <span>Label</span>
                   <span>Role</span>
                   <span>Status</span>
-                  <span>Created</span>
-                  <span>Last used</span>
+                  <span>Created (MSK)</span>
+                  <span>Last used (MSK)</span>
                   <span style={{ textAlign: "right" }}>Actions</span>
                 </div>
 

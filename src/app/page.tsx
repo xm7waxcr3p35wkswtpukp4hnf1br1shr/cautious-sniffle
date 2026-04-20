@@ -783,7 +783,7 @@ export default function HomePage() {
               </span>
               <div style={{ display: "flex", gap: "4px" }}>
                 <button onClick={() => void loadHistory()} style={ghostBtn()}>
-                  {histLoad ? <Spinner size={10} /> : "↻"} Refresh
+                  {histLoad ? <Spinner size={10} /> : "Refresh"}
                 </button>
                 {history.length > 0 && (
                   <button onClick={() => void clearHistory()} style={ghostBtn(true, clearOk)}>

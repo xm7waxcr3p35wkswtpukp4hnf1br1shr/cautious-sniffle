@@ -1101,7 +1101,7 @@ export default function HomePage() {
                       onMouseEnter={e => { if (remoteWordsRef.current) (e.currentTarget as HTMLButtonElement).style.background = "rgba(240,240,242,0.85)"; }}
                       onMouseLeave={e => { if (remoteWordsRef.current) (e.currentTarget as HTMLButtonElement).style.background = C.t0; }}
                     >
-                      Generate 200
+                      Generate
                     </button>
                     {!remoteWordsRef.current && (
                       <span style={{ fontSize: "10px", color: C.t3, marginLeft: "10px", ...CSS.font }}>
@@ -1222,7 +1222,7 @@ export default function HomePage() {
                   ...CSS.font,
                 }}>
                   {remoteWordsRef.current
-                    ? "Click Generate 200 to pick a fresh batch"
+                    ? "Click Generate to pick a fresh batch"
                     : "Load a word list from Pastebin to get started"}
                 </div>
               )}

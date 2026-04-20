@@ -481,10 +481,10 @@ export default function HomePage() {
         {/* Page title */}
         <div style={{ marginBottom: "28px" }}>
           <h1 style={{ fontSize: "20px", fontWeight: 700, margin: "0 0 6px", letterSpacing: "-0.01em", ...FONT }}>
-            Username Checker
+            Username Tool
           </h1>
           <p style={{ fontSize: "12px", color: "var(--t-2)", margin: 0, ...FONT }}>
-            Check Telegram username availability on the Fragment marketplace.
+            Search Fragment for available Telegram usernames.
           </p>
         </div>
 
@@ -554,7 +554,7 @@ export default function HomePage() {
               </PrimaryBtn>
             </InputWrap>
             <p style={{ fontSize: "10px", color: "var(--t-2)", marginBottom: "28px", marginTop: "4px", ...FONT }}>
-              3–32 chars · letters, numbers, underscores · press Enter
+              3–32 chars * letters, numbers, underscores * press Enter
             </p>
 
             {result && !error && (
@@ -586,7 +586,7 @@ export default function HomePage() {
                       )}
                       {result.status === "Reserved" && (
                         <div style={{ fontSize: "11px", color: "var(--ton)", marginTop: "4px", ...FONT }}>
-                          Reserved by Telegram · cannot be registered
+                          Reserved by Telegram * cannot be registered
                         </div>
                       )}
                     </div>
@@ -641,7 +641,7 @@ export default function HomePage() {
                 borderBottom: "1px solid var(--line)",
                 display: "flex", justifyContent: "space-between", alignItems: "center",
               }}>
-                <span style={{ fontSize: "10px", color: "var(--t-2)", textTransform: "uppercase", letterSpacing: "0.06em", ...FONT }}>One per line · comma or semicolon OK</span>
+                <span style={{ fontSize: "10px", color: "var(--t-2)", textTransform: "uppercase", letterSpacing: "0.06em", ...FONT }}>Single? Only Batch.</span>
                 <span style={{ fontSize: "11px", color: "var(--t-1)", fontWeight: 700, ...FONT }}>
                   {batchInput.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).length}
                   <span style={{ color: "var(--t-2)", fontWeight: 400 }}>/200</span>
@@ -842,8 +842,8 @@ export default function HomePage() {
       <footer style={{ borderTop: "1px solid var(--line)", padding: "12px 24px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <TonLogo size={12} />
-          <span style={{ fontSize: "10px", color: "var(--t-2)", ...FONT }}>Unofficial tool · Not affiliated with Telegram or Fragment</span>
-          <span style={{ color: "var(--t-3)", fontSize: "10px" }}>·</span>
+          <span style={{ fontSize: "10px", color: "var(--t-2)", ...FONT }}>Unofficial tool * Not affiliated with Telegram or Fragment</span>
+          <span style={{ color: "var(--t-3)", fontSize: "10px" }}>*</span>
           <a
             href="https://fragment.com"
             target="_blank" rel="noopener noreferrer"

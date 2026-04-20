@@ -703,7 +703,7 @@ export default function HomePage() {
                 value={sweepInput}
                 onChange={e => { setSweepInput(e.target.value); setError(null); setSweepRes([]); }}
                 onKeyDown={e => { if (e.key === "Enter") void checkSweep(); }}
-                placeholder="baseusername"
+                placeholder="username"
                 autoFocus
                 autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
                 style={textInputStyle}
@@ -729,7 +729,7 @@ export default function HomePage() {
                   transition: "all var(--transition)",
                   ...FONT,
                 }}>
-                  {k === "suffix" ? "john + a" : "a + john"}
+                  {k === "suffix" ? "username + a" : "a + username"}
                 </button>
               ))}
             </div>

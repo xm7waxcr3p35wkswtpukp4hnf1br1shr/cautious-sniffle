@@ -6,6 +6,33 @@ const FRAGMENT_API_KEY = process.env.FRAGMENT_API_KEY;
 const FRAGMENT_API_BASE = "https://api.fragment-api.com";
 const FRAGMENT_BASE = "https://fragment.com/";
 
+// Run at most CONCURRENCY async tasks at once — prevents rate-limiting Fragment API
+// when checking large batches (was previously 200 fully parallel → rate limited → false Available)
+const CONCURRENCY = 20;
+
+async function runWithConcurrency<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let idx = 0;
+  const workers = Array.from(
+    { length: Math.min(CONCURRENCY, items.length) },
+    async () => {
+      while (idx < items.length) {
+        const i = idx++;
+        try {
+          results[i] = { status: "fulfilled", value: await fn(items[i]) };
+        } catch (reason) {
+          results[i] = { status: "rejected", reason };
+        }
+      }
+    }
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 async function checkTelegramAvailability(
   username: string
 ): Promise<"free" | "taken" | "reserved"> {
@@ -28,9 +55,7 @@ async function checkTelegramAvailability(
     if (data.ok) return "taken";
 
     const desc = (data.description ?? "").toLowerCase();
-
     if (desc.includes("chat not found")) return "free";
-
     if (
       desc.includes("invalid") ||
       desc.includes("forbidden") ||
@@ -41,7 +66,6 @@ async function checkTelegramAvailability(
     ) {
       return "reserved";
     }
-
     return "free";
   } catch (e) {
     console.error(`[TG] error for @${username}:`, e);
@@ -71,11 +95,15 @@ async function checkViaFragmentScrape(username: string): Promise<{
     try {
       data = (await response.json()) as Record<string, unknown>;
     } catch {
+      // JSON parse failed (rate-limit page, HTML response, etc.)
+      // MUST return Unknown, not Available — false positives break everything
       return { status: "Unknown", source: "fragment.com" };
     }
 
     if (!data || !("h" in data)) {
-      return { status: "Available", source: "fragment.com" };
+      // Unexpected response shape — could be rate limiting.
+      // Return Unknown, NOT Available.
+      return { status: "Unknown", source: "fragment.com" };
     }
 
     const hData = data.h as string;
@@ -178,6 +206,7 @@ async function checkOne(
       hasPremium: result.hasPremium != null ? String(result.hasPremium) : null,
     });
   } catch {
+    // ignore DB insert errors
   }
 
   return {
@@ -223,12 +252,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "usernames array is required" }, { status: 400 });
   }
 
-  if (usernames.length > 200) {
-    return NextResponse.json({ error: "Max 200 usernames per batch" }, { status: 400 });
+  if (usernames.length > 1000) {
+    return NextResponse.json({ error: "Max 1000 usernames per batch" }, { status: 400 });
   }
 
-  const settled = await Promise.allSettled(
-    usernames.map((raw) => checkOne(raw, userId))
+  // Concurrency-limited execution — no more false Available from rate-limiting
+  const settled = await runWithConcurrency(
+    usernames,
+    (raw) => checkOne(raw, userId)
   );
 
   const data = settled.map((r) =>

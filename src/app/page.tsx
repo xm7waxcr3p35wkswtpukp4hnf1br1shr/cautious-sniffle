@@ -556,7 +556,7 @@ export default function HomePage() {
               </PrimaryBtn>
             </InputRow>
             <p style={{ fontSize: "10px", color: "rgba(30,28,24,0.35)", marginBottom: "24px", marginTop: "4px", ...CSS.font }}>
-              3–32 chars · letters, numbers, underscores · press Enter
+              3–32 chars * letters, numbers, underscores * press Enter
             </p>
 
             {result && !error && (
@@ -588,7 +588,7 @@ export default function HomePage() {
                       )}
                       {result.status === "Reserved" && (
                         <div style={{ fontSize: "11px", color: "#0735F5", marginTop: "4px", ...CSS.font }}>
-                          Reserved by Telegram · cannot be registered
+                          Reserved by Telegram * cannot be registered
                         </div>
                       )}
                     </div>
@@ -850,8 +850,8 @@ export default function HomePage() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <TonLogo size={11} />
-          <span style={{ fontSize: "10px", color: "rgba(30,28,24,0.35)", ...CSS.font }}>Unofficial tool · Not affiliated with Telegram or Fragment</span>
-          <span style={{ color: "rgba(30,28,24,0.2)", fontSize: "10px" }}>·</span>
+          <span style={{ fontSize: "10px", color: "rgba(30,28,24,0.35)", ...CSS.font }}>Unofficial tool * Not affiliated with Telegram or Fragment</span>
+          <span style={{ color: "rgba(30,28,24,0.2)", fontSize: "10px" }}>*</span>
           <a
             href="https://fragment.com"
             target="_blank" rel="noopener noreferrer"

@@ -61,13 +61,14 @@ const STATUS_ORDER = ["Available", "For Sale", "Reserved", "Sold", "Taken", "Unk
 const ALPHA  = "abcdefghijklmnopqrstuvwxyz".split("");
 const DIGITS = "0123456789".split("");
 
-// Highlighted / "hot" letters for sweep modes
-// suffix (word + X): s is the most popular, also x, z, y, 0-9
 const SUFFIX_HOT = new Set(["s", "x", "z", "y", "0", "1", "2", "3"]);
-// prefix (X + word): i (iXxx), my, the-style → i, o, e, a, u are common English prefixes
 const PREFIX_HOT = new Set(["i", "e", "o", "a", "m", "t"]);
 
-const PAGE_SIZE = 100; // parser page size
+const PAGE_SIZE = 100;
+
+// Chunk size for API requests — backend concurrency is 5 with retries,
+// so we send in smaller chunks to avoid server-side timeout on huge sweeps
+const API_CHUNK = 100;
 
 function getOrCreateUserId(): string {
   try {
@@ -431,7 +432,29 @@ function SegmentedControl<T extends string>({
   );
 }
 
-// Sweep variant grid with highlighted "hot" letters
+function ProgressBar({ done, total, label }: { done: number; total: number; label?: string }) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  return (
+    <div style={{ marginBottom: "10px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+        <span style={{ fontSize: "10px", color: C.t2, ...CSS.font }}>{label ?? "Checking…"}</span>
+        <span style={{ fontSize: "10px", color: C.t1, fontWeight: 600, ...CSS.font }}>
+          {done} / {total} <span style={{ color: C.t3, fontWeight: 400 }}>({pct}%)</span>
+        </span>
+      </div>
+      <div style={{ height: "2px", background: C.bg3, borderRadius: "1px", overflow: "hidden" }}>
+        <div style={{
+          height: "100%",
+          width: `${pct}%`,
+          background: C.ton,
+          borderRadius: "1px",
+          transition: "width 200ms ease",
+        }} />
+      </div>
+    </div>
+  );
+}
+
 function SweepVariantGrid({
   base,
   mode,
@@ -443,8 +466,6 @@ function SweepVariantGrid({
 }) {
   const chars = mode === "digit-suffix" ? DIGITS : ALPHA;
   const hotSet = mode === "alpha-prefix" ? PREFIX_HOT : SUFFIX_HOT;
-
-  // Build a map username -> result for quick lookup
   const byUsername = new Map(results.map(r => [r.username, r]));
 
   return (
@@ -533,6 +554,7 @@ export default function HomePage() {
   const [parserChecking, setParserChecking] = useState(false);
   const [parserCopied, setParserCopied]     = useState(false);
   const [parserSweepMode, setParserSweepMode] = useState<GenSweepMode>("off");
+  const [parserProgress, setParserProgress] = useState<{ done: number; total: number } | null>(null);
 
   const [wordListUrl, setWordListUrl]           = useState("");
   const [wordListFetching, setWordListFetching] = useState(false);
@@ -582,7 +604,7 @@ export default function HomePage() {
     setResult(null); setBatchRes([]); setSweepRes([]);
     setParserList([]); setParserChecked([]); setError(null);
     setWordListError(null); setWordListInfo(null);
-    setBatchProgress(null);
+    setBatchProgress(null); setParserProgress(null);
   };
 
   const checkSingle = useCallback(async () => {
@@ -600,7 +622,27 @@ export default function HomePage() {
     finally { setLoading(false); }
   }, [input, loadHistory, authHeaders]);
 
-  // Batch: send in chunks of 200 to show progress for large lists
+  // Helper: send usernames in chunks, updating progress as we go
+  const checkInChunks = useCallback(async (
+    usernames: string[],
+    onProgress: (done: number, total: number, partial: CheckResult[]) => void
+  ): Promise<CheckResult[]> => {
+    const allResults: CheckResult[] = [];
+    for (let i = 0; i < usernames.length; i += API_CHUNK) {
+      const chunk = usernames.slice(i, i + API_CHUNK);
+      const res = await fetch("/api/check-username", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ usernames: chunk }),
+      });
+      const d = await res.json() as { results?: CheckResult[]; error?: string };
+      if (!res.ok) throw new Error(d.error ?? "Something went wrong");
+      allResults.push(...(d.results ?? []));
+      onProgress(allResults.length, usernames.length, [...allResults]);
+    }
+    return allResults;
+  }, [authHeaders]);
+
   const checkBatch = useCallback(async () => {
     const lines = batchInput.split(/[\n,;]+/).map(s => s.trim().replace(/^@/, "").toLowerCase()).filter(Boolean);
     if (!lines.length) return;
@@ -608,27 +650,19 @@ export default function HomePage() {
     setLoading(true); setError(null); setBatchRes([]); setBatchSort("none");
     setBatchProgress({ done: 0, total: lines.length });
 
-    const CHUNK = 200;
-    const allResults: CheckResult[] = [];
-
     try {
-      for (let i = 0; i < lines.length; i += CHUNK) {
-        const chunk = lines.slice(i, i + CHUNK);
-        const res = await fetch("/api/check-username", {
-          method: "POST",
-          headers: authHeaders(),
-          body: JSON.stringify({ usernames: chunk }),
-        });
-        const d = await res.json() as { results?: CheckResult[]; error?: string };
-        if (!res.ok) { setError(d.error ?? "Something went wrong"); break; }
-        allResults.push(...(d.results ?? []));
-        setBatchProgress({ done: allResults.length, total: lines.length });
-        setBatchRes([...allResults]);
-      }
+      await checkInChunks(lines, (done, total, partial) => {
+        setBatchProgress({ done, total });
+        setBatchRes(partial);
+      });
       void loadHistory();
-    } catch { setError("Network error."); }
-    finally { setLoading(false); setBatchProgress(null); }
-  }, [batchInput, loadHistory, authHeaders]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Network error.");
+    } finally {
+      setLoading(false);
+      setBatchProgress(null);
+    }
+  }, [batchInput, loadHistory, checkInChunks]);
 
   const checkSweep = useCallback(async () => {
     const base = sweepInput.trim().replace(/^@/, "").toLowerCase();
@@ -711,39 +745,41 @@ export default function HomePage() {
     setParserList(words);
     setParserChecked([]);
     setParserSort("none");
+    setParserProgress(null);
     setWordListError(null);
   }, []);
 
   const handleCheckParsed = useCallback(async () => {
     if (!parserList.length) return;
-    setParserChecking(true); setParserChecked([]); setParserSort("none");
+    setParserChecking(true);
+    setParserChecked([]);
+    setParserSort("none");
+    setParserProgress(null);
+
     try {
       let usernames: string[];
       if (parserSweepMode !== "off") {
-        // No truncation — send all sweep variants
         usernames = parserList.flatMap(w => buildSweepCandidates(w, parserSweepMode as SweepMode));
       } else {
         usernames = parserList;
       }
 
-      // Send in chunks of 200 since backend concurrency handles the actual rate limiting
-      const CHUNK = 200;
-      const allResults: CheckResult[] = [];
-      for (let i = 0; i < usernames.length; i += CHUNK) {
-        const chunk = usernames.slice(i, i + CHUNK);
-        const res = await fetch("/api/check-username", {
-          method: "POST",
-          headers: authHeaders(),
-          body: JSON.stringify({ usernames: chunk }),
-        });
-        const d = await res.json() as { results?: CheckResult[]; error?: string };
-        if (d.results) allResults.push(...d.results);
-      }
+      setParserProgress({ done: 0, total: usernames.length });
+
+      const allResults = await checkInChunks(usernames, (done, total, partial) => {
+        setParserProgress({ done, total });
+        setParserChecked(partial);
+      });
+
       setParserChecked(allResults);
       void loadHistory();
-    } catch { /**/ }
-    finally { setParserChecking(false); }
-  }, [parserList, parserSweepMode, loadHistory, authHeaders]);
+    } catch (e) {
+      console.error("Parser check error:", e);
+    } finally {
+      setParserChecking(false);
+      setParserProgress(null);
+    }
+  }, [parserList, parserSweepMode, loadHistory, checkInChunks]);
 
   const handleCopyParsed = useCallback(() => {
     navigator.clipboard.writeText(parserList.join("\n")).then(() => {
@@ -755,11 +791,11 @@ export default function HomePage() {
   const fmtDate = (s: string) => {
     try {
       const d = new Date(s);
-      return isNaN(d.getTime()) ? s : d.toLocaleString("en-GB", {
+      return isNaN(d.getTime()) ? s : d.toLocaleString("ru-RU", {
         timeZone: "Europe/Moscow",
         month: "short", day: "numeric",
         hour: "2-digit", minute: "2-digit",
-      });
+      }).replace(",", "");
     } catch { return s; }
   };
 
@@ -785,7 +821,6 @@ export default function HomePage() {
     ...CSS.font,
   });
 
-  // Total sweep request count for parser (no truncation)
   const sweepRequestCount = parserSweepMode === "off"
     ? parserList.length
     : parserSweepMode === "digit-suffix"
@@ -1006,25 +1041,8 @@ export default function HomePage() {
                 />
               </div>
 
-              {/* Progress bar */}
               {batchProgress && (
-                <div style={{ marginBottom: "10px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "10px", color: C.t2, ...CSS.font }}>Checking…</span>
-                    <span style={{ fontSize: "10px", color: C.t1, fontWeight: 600, ...CSS.font }}>
-                      {batchProgress.done} / {batchProgress.total}
-                    </span>
-                  </div>
-                  <div style={{ height: "2px", background: C.bg3, borderRadius: "1px", overflow: "hidden" }}>
-                    <div style={{
-                      height: "100%",
-                      width: `${(batchProgress.done / batchProgress.total) * 100}%`,
-                      background: C.ton,
-                      borderRadius: "1px",
-                      transition: "width 300ms ease",
-                    }} />
-                  </div>
-                </div>
+                <ProgressBar done={batchProgress.done} total={batchProgress.total} label="Checking batch…" />
               )}
 
               <div style={{ marginBottom: "18px" }}>
@@ -1100,13 +1118,11 @@ export default function HomePage() {
                   )}
                   {sweepRes.length > 1 && (
                     <div>
-                      {/* Visual grid */}
                       <SweepVariantGrid
                         base={sweepInput.trim().replace(/^@/, "").toLowerCase()}
                         mode={sweepMode}
                         results={sweepRes.slice(1)}
                       />
-                      {/* Full list */}
                       <Results results={sweepRes.slice(1)} sort={sweepSort} setSort={setSweepSort} />
                     </div>
                   )}
@@ -1269,7 +1285,7 @@ export default function HomePage() {
                       />
                       {parserSweepMode !== "off" && (
                         <div style={{ fontSize: "10px", color: C.t2, ...CSS.font }}>
-                          {sweepRequestCount} requests total · sent in batches of 200
+                          {sweepRequestCount} requests total · sent in chunks of {API_CHUNK} · retries on rate-limit
                         </div>
                       )}
                     </div>
@@ -1297,6 +1313,15 @@ export default function HomePage() {
                       {parserList.length} words
                     </span>
                   </div>
+
+                  {/* Progress bar for parser */}
+                  {parserProgress && (
+                    <ProgressBar
+                      done={parserProgress.done}
+                      total={parserProgress.total}
+                      label={`Checking${parserSweepMode !== "off" ? " (sweep)" : ""}…`}
+                    />
+                  )}
 
                   {parserChecked.length > 0 ? (
                     <Results results={parserChecked} sort={parserSort} setSort={setParserSort} />

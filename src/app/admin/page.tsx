@@ -22,21 +22,16 @@ type ApiKey = {
   last_used_at: string | null;
 };
 
-// Correctly format dates in MSK (UTC+3)
+// Format date using the browser's local timezone
 function fmt(s: string | null) {
   if (!s) return "—";
   try {
     const d = new Date(s);
     if (isNaN(d.getTime())) return s;
-    // toLocaleString with Europe/Moscow gives correct MSK time
-    return d.toLocaleString("ru-RU", {
-      timeZone: "Europe/Moscow",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).replace(",", "");
+    return d.toLocaleString(undefined, {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
   } catch { return s; }
 }
 
@@ -88,16 +83,12 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 function Input({ value, onChange, placeholder, type = "text" }: {
-  value: string; onChange: (v: string) => void;
-  placeholder?: string; type?: string;
+  value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
 }) {
   const [focused, setFocused] = useState(false);
   return (
-    <input
-      type={type} value={value}
-      onChange={e => onChange(e.target.value)}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
+    <input type={type} value={value} onChange={e => onChange(e.target.value)}
+      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
       placeholder={placeholder}
       style={{
         background: C.bg2, border: `0.5px solid ${focused ? C.lineHi : C.line}`,
@@ -110,8 +101,7 @@ function Input({ value, onChange, placeholder, type = "text" }: {
 }
 
 function Select({ value, onChange, options }: {
-  value: string; onChange: (v: string) => void;
-  options: { k: string; label: string }[];
+  value: string; onChange: (v: string) => void; options: { k: string; label: string }[];
 }) {
   return (
     <select value={value} onChange={e => onChange(e.target.value)} style={{
@@ -131,7 +121,6 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // Create form
   const [label, setLabel] = useState("");
   const [rawKey, setRawKey] = useState("");
   const [role, setRole] = useState("user");
@@ -141,8 +130,7 @@ export default function AdminPage() {
   const [createOk, setCreateOk] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
       const res = await fetch("/api/admin/keys");
       if (res.status === 403) { router.push("/"); return; }
@@ -158,8 +146,7 @@ export default function AdminPage() {
 
   const toggle = async (id: string, is_active: boolean) => {
     await fetch("/api/admin/keys", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, is_active }),
     });
     setKeys(prev => prev.map(k => k.id === id ? { ...k, is_active } : k));
@@ -183,8 +170,7 @@ export default function AdminPage() {
     setCreating(true); setCreateError(null); setCreateOk(false);
     try {
       const res = await fetch("/api/admin/keys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ label: label.trim(), rawKey: rawKey.trim(), role, expiresAt: expiresAt || undefined }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };
@@ -222,21 +208,19 @@ export default function AdminPage() {
               <h1 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.01em", color: C.t0, ...F }}>
                 Admin Panel
               </h1>
-              <p style={{ fontSize: "11px", color: C.t2, margin: 0, ...F }}>API key management · times shown in MSK (UTC+3)</p>
+              <p style={{ fontSize: "11px", color: C.t2, margin: 0, ...F }}>API key management</p>
             </div>
-            <div style={{ display: "flex", gap: "6px" }}>
-              <a href="/" style={{
-                padding: "6px 12px", background: "transparent",
-                border: `0.5px solid ${C.line}`, borderRadius: "2px",
-                color: C.t2, fontSize: "11px", textDecoration: "none",
-                transition: "all 100ms ease", ...F,
-              }}
-                onMouseEnter={e => { e.currentTarget.style.color = C.t0; e.currentTarget.style.borderColor = C.lineHi; }}
-                onMouseLeave={e => { e.currentTarget.style.color = C.t2; e.currentTarget.style.borderColor = C.line; }}
-              >
-                Back to tool
-              </a>
-            </div>
+            <a href="/" style={{
+              padding: "6px 12px", background: "transparent",
+              border: `0.5px solid ${C.line}`, borderRadius: "2px",
+              color: C.t2, fontSize: "11px", textDecoration: "none",
+              transition: "all 100ms ease", ...F,
+            }}
+              onMouseEnter={e => { e.currentTarget.style.color = C.t0; e.currentTarget.style.borderColor = C.lineHi; }}
+              onMouseLeave={e => { e.currentTarget.style.color = C.t2; e.currentTarget.style.borderColor = C.line; }}
+            >
+              Back to tool
+            </a>
           </div>
 
           {/* Create key form */}
@@ -247,10 +231,8 @@ export default function AdminPage() {
               ))}
               <span style={{ fontSize: "10px", color: C.t3, marginLeft: "6px", letterSpacing: "0.06em", ...F }}>new api key</span>
             </div>
-
             <div style={{ padding: "18px" }}>
               {sectionTitle("Create new key")}
-
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                 <div>
                   <div style={{ fontSize: "10px", color: C.t2, marginBottom: "5px", letterSpacing: "0.06em", textTransform: "uppercase", ...F }}>Label</div>
@@ -261,24 +243,17 @@ export default function AdminPage() {
                   <Select value={role} onChange={setRole} options={[{ k: "user", label: "user" }, { k: "admin", label: "admin" }]} />
                 </div>
               </div>
-
               <div style={{ marginBottom: "10px" }}>
                 <div style={{ fontSize: "10px", color: C.t2, marginBottom: "5px", letterSpacing: "0.06em", textTransform: "uppercase", ...F }}>API Key (raw value)</div>
                 <div style={{ display: "flex", gap: "6px" }}>
-                  <div style={{ flex: 1 }}>
-                    <Input value={rawKey} onChange={setRawKey} placeholder="min 8 characters" />
-                  </div>
+                  <div style={{ flex: 1 }}><Input value={rawKey} onChange={setRawKey} placeholder="min 8 characters" /></div>
                   <button onClick={generate} style={{
-                    padding: "0 12px", background: C.bg3,
-                    border: `0.5px solid ${C.lineHi}`, borderRadius: "2px",
-                    color: C.t1, fontSize: "11px", cursor: "pointer",
-                    whiteSpace: "nowrap", transition: "all 100ms ease", ...F,
+                    padding: "0 12px", background: C.bg3, border: `0.5px solid ${C.lineHi}`, borderRadius: "2px",
+                    color: C.t1, fontSize: "11px", cursor: "pointer", whiteSpace: "nowrap", transition: "all 100ms ease", ...F,
                   }}
                     onMouseEnter={e => { e.currentTarget.style.color = C.t0; }}
                     onMouseLeave={e => { e.currentTarget.style.color = C.t1; }}
-                  >
-                    Generate
-                  </button>
+                  >Generate</button>
                 </div>
                 {rawKey && (
                   <div style={{ fontSize: "10px", color: C.t3, marginTop: "4px", ...F }}>
@@ -286,12 +261,10 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
-
               <div style={{ marginBottom: "14px" }}>
                 <div style={{ fontSize: "10px", color: C.t2, marginBottom: "5px", letterSpacing: "0.06em", textTransform: "uppercase", ...F }}>Expires at (optional)</div>
                 <Input value={expiresAt} onChange={setExpiresAt} type="datetime-local" />
               </div>
-
               {createError && (
                 <div style={{ padding: "7px 10px", background: "rgba(240,64,64,0.07)", border: "0.5px solid rgba(240,64,64,0.28)", borderRadius: "2px", color: C.red, fontSize: "11px", marginBottom: "10px", ...F }}>
                   ✕ {createError}
@@ -302,14 +275,13 @@ export default function AdminPage() {
                   ✓ Key created successfully
                 </div>
               )}
-
               <button onClick={() => void create()} disabled={creating || !label.trim() || !rawKey.trim()} style={{
-                padding: "9px 18px", background: creating || !label.trim() || !rawKey.trim() ? "rgba(240,240,242,0.05)" : C.t0,
+                padding: "9px 18px",
+                background: creating || !label.trim() || !rawKey.trim() ? "rgba(240,240,242,0.05)" : C.t0,
                 color: creating || !label.trim() || !rawKey.trim() ? C.t3 : C.bg0,
                 border: "none", borderRadius: "2px", fontSize: "12px", fontWeight: 700,
                 letterSpacing: "0.05em", cursor: creating || !label.trim() || !rawKey.trim() ? "not-allowed" : "pointer",
-                display: "flex", alignItems: "center", gap: "7px",
-                transition: "background 120ms ease", ...F,
+                display: "flex", alignItems: "center", gap: "7px", transition: "background 120ms ease", ...F,
               }}
                 onMouseEnter={e => { if (!creating && label.trim() && rawKey.trim()) (e.currentTarget as HTMLButtonElement).style.background = "rgba(240,240,242,0.87)"; }}
                 onMouseLeave={e => { if (!creating && label.trim() && rawKey.trim()) (e.currentTarget as HTMLButtonElement).style.background = C.t0; }}
@@ -349,22 +321,15 @@ export default function AdminPage() {
               </div>
             ) : (
               <div style={{ border: `0.5px solid ${C.line}`, borderRadius: "4px", overflow: "hidden", background: C.bg1, animation: "fadeUp 0.15s ease forwards" }}>
-                {/* Table header */}
                 <div style={{
                   display: "grid", gridTemplateColumns: "1fr 70px 80px 130px 130px 120px",
-                  padding: "7px 14px", background: C.bg2,
-                  borderBottom: `0.5px solid ${C.line}`,
-                  fontSize: "9px", color: C.t3, fontWeight: 700,
-                  textTransform: "uppercase", letterSpacing: "0.08em", ...F,
+                  padding: "7px 14px", background: C.bg2, borderBottom: `0.5px solid ${C.line}`,
+                  fontSize: "9px", color: C.t3, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", ...F,
                 }}>
-                  <span>Label</span>
-                  <span>Role</span>
-                  <span>Status</span>
-                  <span>Created (MSK)</span>
-                  <span>Last used (MSK)</span>
+                  <span>Label</span><span>Role</span><span>Status</span>
+                  <span>Created</span><span>Last used</span>
                   <span style={{ textAlign: "right" }}>Actions</span>
                 </div>
-
                 {keys.map((k, i) => (
                   <div key={k.id} style={{
                     display: "grid", gridTemplateColumns: "1fr 70px 80px 130px 130px 120px",
@@ -392,8 +357,7 @@ export default function AdminPage() {
                         padding: "3px 8px", background: "transparent",
                         border: `0.5px solid ${C.line}`, borderRadius: "2px",
                         color: k.is_active ? C.yellow : C.green,
-                        fontSize: "10px", fontWeight: 600, cursor: "pointer",
-                        transition: "all 100ms ease", ...F,
+                        fontSize: "10px", fontWeight: 600, cursor: "pointer", transition: "all 100ms ease", ...F,
                       }}>
                         {k.is_active ? "Disable" : "Enable"}
                       </button>
@@ -401,10 +365,8 @@ export default function AdminPage() {
                         padding: "3px 8px",
                         background: deleteConfirm === k.id ? "rgba(240,64,64,0.08)" : "transparent",
                         border: `0.5px solid ${deleteConfirm === k.id ? "rgba(240,64,64,0.35)" : C.line}`,
-                        borderRadius: "2px",
-                        color: deleteConfirm === k.id ? C.red : C.t2,
-                        fontSize: "10px", fontWeight: 600, cursor: "pointer",
-                        transition: "all 100ms ease", ...F,
+                        borderRadius: "2px", color: deleteConfirm === k.id ? C.red : C.t2,
+                        fontSize: "10px", fontWeight: 600, cursor: "pointer", transition: "all 100ms ease", ...F,
                       }}>
                         {deleteConfirm === k.id ? "Sure?" : "Delete"}
                       </button>

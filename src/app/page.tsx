@@ -26,23 +26,14 @@ type Sort = "none" | "az" | "za" | "group";
 type SweepMode = "alpha-suffix" | "alpha-prefix" | "digit-suffix";
 type GenSweepMode = "off" | "alpha-suffix" | "alpha-prefix" | "digit-suffix";
 
-const CSS = {
-  font: { fontFamily: "var(--font-mono)" } as React.CSSProperties,
-};
+const CSS = { font: { fontFamily: "var(--font-mono)" } as React.CSSProperties };
 
 const C = {
-  bg0:     "#0d0d0f",
-  bg1:     "#111113",
-  bg2:     "#161618",
-  bg3:     "#1b1b1e",
-  line:    "rgba(255,255,255,0.07)",
-  lineHi:  "rgba(255,255,255,0.13)",
-  t0:      "#f0f0f2",
-  t1:      "rgba(240,240,242,0.6)",
-  t2:      "rgba(240,240,242,0.35)",
-  t3:      "rgba(240,240,242,0.18)",
-  ton:     "#0098ea",
-  tonDim:  "rgba(0,152,234,0.15)",
+  bg0: "#0d0d0f", bg1: "#111113", bg2: "#161618", bg3: "#1b1b1e",
+  line: "rgba(255,255,255,0.07)", lineHi: "rgba(255,255,255,0.13)",
+  t0: "#f0f0f2", t1: "rgba(240,240,242,0.6)",
+  t2: "rgba(240,240,242,0.35)", t3: "rgba(240,240,242,0.18)",
+  ton: "#0098ea", tonDim: "rgba(0,152,234,0.15)",
 };
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; border: string; dot: string }> = {
@@ -60,59 +51,49 @@ const getS = (s: string) =>
 const STATUS_ORDER = ["Available", "For Sale", "Reserved", "Sold", "Taken", "Unknown", "Invalid"];
 const ALPHA  = "abcdefghijklmnopqrstuvwxyz".split("");
 const DIGITS = "0123456789".split("");
-
 const SUFFIX_HOT = new Set(["s", "x", "z", "y", "0", "1", "2", "3"]);
 const PREFIX_HOT = new Set(["i", "e", "o", "a", "m", "t"]);
-
 const PAGE_SIZE = 100;
-
-// Chunk size for API requests — backend concurrency is 5 with retries,
-// so we send in smaller chunks to avoid server-side timeout on huge sweeps
 const API_CHUNK = 100;
 
 function getOrCreateUserId(): string {
   try {
     const key = "username_tool_uid";
     let uid = localStorage.getItem(key);
-    if (!uid) {
-      uid = crypto.randomUUID();
-      localStorage.setItem(key, uid);
-    }
+    if (!uid) { uid = crypto.randomUUID(); localStorage.setItem(key, uid); }
     return uid;
-  } catch {
-    return "anonymous";
-  }
+  } catch { return "anonymous"; }
 }
 
 function buildSweepCandidates(base: string, mode: SweepMode): string[] {
   const chars = mode === "digit-suffix" ? DIGITS : ALPHA;
-  const variants = chars.map(c => mode === "alpha-prefix" ? `${c}${base}` : `${base}${c}`);
-  return [base, ...variants];
+  return [base, ...chars.map(c => mode === "alpha-prefix" ? `${c}${base}` : `${base}${c}`)];
+}
+
+// Format date using browser's local timezone
+function fmtDate(s: string) {
+  try {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch { return s; }
 }
 
 // ── Components ────────────────────────────────────────────────────────────────
 
 function StatusPill({ status }: { status: string }) {
   const cfg = getS(status);
-  const isActive = status === "Available";
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: "5px",
-      padding: "2px 7px 2px 5px",
-      background: cfg.bg,
-      border: `0.5px solid ${cfg.border}`,
-      borderRadius: "2px",
-      fontSize: "11px",
-      fontWeight: 600,
-      color: cfg.color,
-      letterSpacing: "0.02em",
-      whiteSpace: "nowrap",
-      ...CSS.font,
+      padding: "2px 7px 2px 5px", background: cfg.bg,
+      border: `0.5px solid ${cfg.border}`, borderRadius: "2px",
+      fontSize: "11px", fontWeight: 600, color: cfg.color,
+      letterSpacing: "0.02em", whiteSpace: "nowrap", ...CSS.font,
     }}>
       <span style={{
-        width: 5, height: 5, borderRadius: "50%",
-        background: cfg.dot, flexShrink: 0,
-        animation: isActive ? "pulse-dot 2s ease-in-out infinite" : "none",
+        width: 5, height: 5, borderRadius: "50%", background: cfg.dot, flexShrink: 0,
+        animation: status === "Available" ? "pulse-dot 2s ease-in-out infinite" : "none",
       }} />
       {cfg.label}
     </span>
@@ -147,24 +128,16 @@ function PremiumStar() {
 
 function Avatar({ username, photo, size = 26 }: { username: string; photo?: string | null; size?: number }) {
   const letter = username[0]?.toUpperCase() ?? "?";
-  if (photo) {
-    return <img src={photo} alt={username} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: `0.5px solid ${C.lineHi}` }} />;
-  }
+  if (photo) return <img src={photo} alt={username} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: `0.5px solid ${C.lineHi}` }} />;
   const hue = (letter.charCodeAt(0) * 47) % 360;
   return (
     <div style={{
       width: size, height: size, borderRadius: "50%",
-      background: `hsl(${hue}, 10%, 18%)`,
-      border: `0.5px solid ${C.lineHi}`,
+      background: `hsl(${hue}, 10%, 18%)`, border: `0.5px solid ${C.lineHi}`,
       display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: Math.round(size * 0.38) + "px",
-      fontWeight: 700,
-      color: `hsl(${hue}, 40%, 65%)`,
-      flexShrink: 0,
-      ...CSS.font,
-    }}>
-      {letter}
-    </div>
+      fontSize: Math.round(size * 0.38) + "px", fontWeight: 700,
+      color: `hsl(${hue}, 40%, 65%)`, flexShrink: 0, ...CSS.font,
+    }}>{letter}</div>
   );
 }
 
@@ -186,17 +159,11 @@ const ROW_BORDER: React.CSSProperties = { borderBottom: `0.5px solid ${C.line}` 
 
 function ResultRow({ r, last }: { r: CheckResult; last: boolean }) {
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "28px 1fr auto 14px",
-        alignItems: "center",
-        padding: "8px 13px",
-        gap: "10px",
-        ...(!last ? ROW_BORDER : {}),
-        transition: "background 100ms ease",
-        cursor: "default",
-      }}
+    <div style={{
+      display: "grid", gridTemplateColumns: "28px 1fr auto 14px",
+      alignItems: "center", padding: "8px 13px", gap: "10px",
+      ...(!last ? ROW_BORDER : {}), transition: "background 100ms ease", cursor: "default",
+    }}
       onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.background = C.bg3)}
       onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
     >
@@ -206,16 +173,10 @@ function ResultRow({ r, last }: { r: CheckResult; last: boolean }) {
           <span style={{ fontSize: "13px", fontWeight: 600, color: C.t0, ...CSS.font }}>@{r.username}</span>
           {r.hasPremium && <PremiumStar />}
         </div>
-        {r.name && (
-          <div style={{ fontSize: "11px", color: C.t2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...CSS.font }}>
-            {r.name}
-          </div>
-        )}
+        {r.name && <div style={{ fontSize: "11px", color: C.t2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...CSS.font }}>{r.name}</div>}
       </div>
       <StatusPill status={r.status} />
-      {r.status !== "Invalid" ? (
-        <ExtLink href={`https://fragment.com/username/${r.username}`} />
-      ) : <span />}
+      {r.status !== "Invalid" ? <ExtLink href={`https://fragment.com/username/${r.username}`} /> : <span />}
     </div>
   );
 }
@@ -228,13 +189,7 @@ function StatsPills({ results }: { results: CheckResult[] }) {
       {counts.map(({ s, n }) => {
         const cfg = getS(s);
         return (
-          <div key={s} style={{
-            padding: "2px 8px",
-            background: cfg.bg,
-            border: `0.5px solid ${cfg.border}`,
-            borderRadius: "2px",
-            display: "flex", gap: "6px", alignItems: "center",
-          }}>
+          <div key={s} style={{ padding: "2px 8px", background: cfg.bg, border: `0.5px solid ${cfg.border}`, borderRadius: "2px", display: "flex", gap: "6px", alignItems: "center" }}>
             <span style={{ fontSize: "10px", color: cfg.color, fontWeight: 600, letterSpacing: "0.04em", ...CSS.font }}>{cfg.label}</span>
             <span style={{ fontSize: "11px", fontWeight: 700, color: C.t0, ...CSS.font }}>{n}</span>
           </div>
@@ -246,29 +201,18 @@ function StatsPills({ results }: { results: CheckResult[] }) {
 
 function SortBar({ sort, setSort }: { sort: Sort; setSort: (s: Sort) => void }) {
   const opts: { k: Sort; label: string }[] = [
-    { k: "none",  label: "Default" },
-    { k: "az",    label: "A → Z" },
-    { k: "za",    label: "Z → A" },
-    { k: "group", label: "Group" },
+    { k: "none", label: "Default" }, { k: "az", label: "A → Z" },
+    { k: "za", label: "Z → A" }, { k: "group", label: "Group" },
   ];
   return (
     <div style={{ display: "flex", gap: "2px", alignItems: "center", justifyContent: "flex-end", marginBottom: "8px" }}>
       <span style={{ fontSize: "10px", color: C.t2, marginRight: "4px", letterSpacing: "0.06em", ...CSS.font }}>Sort</span>
       {opts.map(({ k, label }) => (
         <button key={k} onClick={() => setSort(k)} style={{
-          background: sort === k ? C.bg3 : "transparent",
-          border: `0.5px solid ${sort === k ? C.lineHi : C.line}`,
-          borderRadius: "2px",
-          padding: "2px 8px",
-          color: sort === k ? C.t0 : C.t2,
-          fontSize: "11px",
-          fontWeight: sort === k ? 700 : 400,
-          cursor: "pointer",
-          transition: "all 100ms ease",
-          ...CSS.font,
-        }}>
-          {label}
-        </button>
+          background: sort === k ? C.bg3 : "transparent", border: `0.5px solid ${sort === k ? C.lineHi : C.line}`,
+          borderRadius: "2px", padding: "2px 8px", color: sort === k ? C.t0 : C.t2,
+          fontSize: "11px", fontWeight: sort === k ? 700 : 400, cursor: "pointer", transition: "all 100ms ease", ...CSS.font,
+        }}>{label}</button>
       ))}
     </div>
   );
@@ -290,7 +234,6 @@ function Results({ results, sort, setSort }: { results: CheckResult[]; sort: Sor
     sort === "az" ? [...results].sort((a, b) => a.username.localeCompare(b.username))
     : sort === "za" ? [...results].sort((a, b) => b.username.localeCompare(a.username))
     : results;
-
   const grouped = (() => {
     if (sort !== "group") return null;
     const g: { status: string; items: CheckResult[] }[] = [];
@@ -303,7 +246,6 @@ function Results({ results, sort, setSort }: { results: CheckResult[]; sort: Sor
     if (extra.length) g.push({ status: "Other", items: extra });
     return g;
   })();
-
   return (
     <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
       <StatsPills results={results} />
@@ -331,102 +273,45 @@ function Results({ results, sort, setSort }: { results: CheckResult[]; sort: Sor
 function InputRow({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   const [focused, setFocused] = useState(false);
   return (
-    <div
-      onFocusCapture={() => setFocused(true)}
-      onBlurCapture={() => setFocused(false)}
-      style={{
-        display: "flex", alignItems: "center",
-        border: `0.5px solid ${focused ? C.lineHi : C.line}`,
-        borderRadius: "2px",
-        background: C.bg1,
-        transition: "border-color 120ms ease",
-        overflow: "hidden",
-        ...style,
-      }}
-    >
+    <div onFocusCapture={() => setFocused(true)} onBlurCapture={() => setFocused(false)}
+      style={{ display: "flex", alignItems: "center", border: `0.5px solid ${focused ? C.lineHi : C.line}`, borderRadius: "2px", background: C.bg1, transition: "border-color 120ms ease", overflow: "hidden", ...style }}>
       {children}
     </div>
   );
 }
 
 const TEXT_INPUT: React.CSSProperties = {
-  flex: 1,
-  background: "transparent",
-  border: "none",
-  outline: "none",
-  color: C.t0,
-  fontSize: "13px",
-  fontWeight: 600,
-  padding: "9px 8px",
-  fontFamily: "var(--font-mono)",
+  flex: 1, background: "transparent", border: "none", outline: "none",
+  color: C.t0, fontSize: "13px", fontWeight: 600, padding: "9px 8px", fontFamily: "var(--font-mono)",
 };
 
-function PrimaryBtn({ onClick, disabled, loading, children }: {
-  onClick: () => void;
-  disabled: boolean;
-  loading?: boolean;
-  children: React.ReactNode;
-}) {
+function PrimaryBtn({ onClick, disabled, loading, children }: { onClick: () => void; disabled: boolean; loading?: boolean; children: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        background: disabled ? "rgba(240,240,242,0.05)" : C.t0,
-        color: disabled ? C.t3 : C.bg0,
-        border: "none",
-        borderRadius: "0",
-        padding: "0 16px",
-        height: "100%",
-        minHeight: "38px",
-        fontSize: "11px",
-        fontWeight: 700,
-        letterSpacing: "0.05em",
-        cursor: disabled ? "not-allowed" : "pointer",
-        display: "flex", alignItems: "center", gap: "6px",
-        whiteSpace: "nowrap", flexShrink: 0,
-        transition: "background 120ms ease, color 120ms ease",
-        fontFamily: "var(--font-mono)",
-        borderLeft: `0.5px solid ${C.line}`,
-      }}
+    <button onClick={onClick} disabled={disabled} style={{
+      background: disabled ? "rgba(240,240,242,0.05)" : C.t0, color: disabled ? C.t3 : C.bg0,
+      border: "none", borderRadius: "0", padding: "0 16px", height: "100%", minHeight: "38px",
+      fontSize: "11px", fontWeight: 700, letterSpacing: "0.05em", cursor: disabled ? "not-allowed" : "pointer",
+      display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap", flexShrink: 0,
+      transition: "background 120ms ease, color 120ms ease", fontFamily: "var(--font-mono)", borderLeft: `0.5px solid ${C.line}`,
+    }}
       onMouseEnter={e => { if (!disabled) (e.currentTarget as HTMLButtonElement).style.background = "rgba(240,240,242,0.85)"; }}
       onMouseLeave={e => { if (!disabled) (e.currentTarget as HTMLButtonElement).style.background = C.t0; }}
     >
-      {loading ? <Spinner size={11} /> : null}
-      {children}
+      {loading ? <Spinner size={11} /> : null}{children}
     </button>
   );
 }
 
-function SegmentedControl<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: { k: T; label: string }[];
-  value: T;
-  onChange: (v: T) => void;
-}) {
+function SegmentedControl<T extends string>({ label, options, value, onChange }: { label: string; options: { k: T; label: string }[]; value: T; onChange: (v: T) => void }) {
   return (
     <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
       <span style={{ fontSize: "10px", color: C.t2, letterSpacing: "0.05em", marginRight: "5px", ...CSS.font }}>{label}</span>
       {options.map(({ k, label: lbl }) => (
         <button key={k} onClick={() => onChange(k)} style={{
-          background: value === k ? C.bg3 : "transparent",
-          border: `0.5px solid ${value === k ? C.lineHi : C.line}`,
-          borderRadius: "2px",
-          padding: "3px 9px",
-          color: value === k ? C.t0 : C.t2,
-          fontSize: "11px",
-          fontWeight: value === k ? 700 : 400,
-          cursor: "pointer",
-          transition: "all 100ms ease",
-          ...CSS.font,
-        }}>
-          {lbl}
-        </button>
+          background: value === k ? C.bg3 : "transparent", border: `0.5px solid ${value === k ? C.lineHi : C.line}`,
+          borderRadius: "2px", padding: "3px 9px", color: value === k ? C.t0 : C.t2,
+          fontSize: "11px", fontWeight: value === k ? 700 : 400, cursor: "pointer", transition: "all 100ms ease", ...CSS.font,
+        }}>{lbl}</button>
       ))}
     </div>
   );
@@ -443,31 +328,16 @@ function ProgressBar({ done, total, label }: { done: number; total: number; labe
         </span>
       </div>
       <div style={{ height: "2px", background: C.bg3, borderRadius: "1px", overflow: "hidden" }}>
-        <div style={{
-          height: "100%",
-          width: `${pct}%`,
-          background: C.ton,
-          borderRadius: "1px",
-          transition: "width 200ms ease",
-        }} />
+        <div style={{ height: "100%", width: `${pct}%`, background: C.ton, borderRadius: "1px", transition: "width 200ms ease" }} />
       </div>
     </div>
   );
 }
 
-function SweepVariantGrid({
-  base,
-  mode,
-  results,
-}: {
-  base: string;
-  mode: SweepMode;
-  results: CheckResult[];
-}) {
+function SweepVariantGrid({ base, mode, results }: { base: string; mode: SweepMode; results: CheckResult[] }) {
   const chars = mode === "digit-suffix" ? DIGITS : ALPHA;
   const hotSet = mode === "alpha-prefix" ? PREFIX_HOT : SUFFIX_HOT;
   const byUsername = new Map(results.map(r => [r.username, r]));
-
   return (
     <div style={{ marginBottom: "14px" }}>
       <div style={{ fontSize: "9px", fontWeight: 700, color: C.t2, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "8px", ...CSS.font }}>
@@ -480,36 +350,19 @@ function SweepVariantGrid({
           const cfg = r ? getS(r.status) : null;
           const isHot = hotSet.has(c);
           return (
-            <a
-              key={c}
-              href={`https://fragment.com/username/${username}`}
-              target="_blank"
-              rel="noopener noreferrer"
+            <a key={c} href={`https://fragment.com/username/${username}`} target="_blank" rel="noopener noreferrer"
               title={`@${username}${r ? ` · ${r.status}` : ""}`}
               style={{
-                display: "inline-flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                width: "44px",
-                padding: "5px 4px 4px",
+                display: "inline-flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                width: "44px", padding: "5px 4px 4px",
                 background: cfg ? cfg.bg : C.bg2,
                 border: `0.5px solid ${isHot ? "rgba(0,152,234,0.45)" : cfg ? cfg.border : C.line}`,
-                borderRadius: "2px",
-                textDecoration: "none",
-                transition: "all 100ms ease",
-                position: "relative",
+                borderRadius: "2px", textDecoration: "none", transition: "all 100ms ease", position: "relative",
               }}
               onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = C.bg3; }}
               onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = cfg ? cfg.bg : C.bg2; }}
             >
-              {isHot && (
-                <span style={{
-                  position: "absolute", top: "2px", right: "3px",
-                  width: "4px", height: "4px", borderRadius: "50%",
-                  background: C.ton, opacity: 0.8,
-                }} />
-              )}
+              {isHot && <span style={{ position: "absolute", top: "2px", right: "3px", width: "4px", height: "4px", borderRadius: "50%", background: C.ton, opacity: 0.8 }} />}
               <span style={{ fontSize: "12px", fontWeight: 700, color: cfg ? cfg.color : C.t2, ...CSS.font }}>{c}</span>
               <span style={{ fontSize: "9px", color: cfg ? cfg.color : C.t3, opacity: 0.8, marginTop: "1px", ...CSS.font }}>
                 {r ? r.status.slice(0, 4) : "···"}
@@ -544,25 +397,22 @@ export default function HomePage() {
   const [clearOk, setClearOk]       = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Parser state
-  const allWordsRef    = useRef<string[]>([]);
-  const shownIndices   = useRef<Set<number>>(new Set());
+  const allWordsRef  = useRef<string[]>([]);
+  const shownIndices = useRef<Set<number>>(new Set());
 
-  const [parserList, setParserList]         = useState<string[]>([]);
-  const [parserChecked, setParserChecked]   = useState<CheckResult[]>([]);
-  const [parserSort, setParserSort]         = useState<Sort>("none");
-  const [parserChecking, setParserChecking] = useState(false);
-  const [parserCopied, setParserCopied]     = useState(false);
-  const [parserSweepMode, setParserSweepMode] = useState<GenSweepMode>("off");
-  const [parserProgress, setParserProgress] = useState<{ done: number; total: number } | null>(null);
+  const [parserList, setParserList]             = useState<string[]>([]);
+  const [parserChecked, setParserChecked]       = useState<CheckResult[]>([]);
+  const [parserSort, setParserSort]             = useState<Sort>("none");
+  const [parserChecking, setParserChecking]     = useState(false);
+  const [parserCopied, setParserCopied]         = useState(false);
+  const [parserSweepMode, setParserSweepMode]   = useState<GenSweepMode>("off");
+  const [parserProgress, setParserProgress]     = useState<{ done: number; total: number } | null>(null);
+  const [batchProgress, setBatchProgress]       = useState<{ done: number; total: number } | null>(null);
 
   const [wordListUrl, setWordListUrl]           = useState("");
   const [wordListFetching, setWordListFetching] = useState(false);
   const [wordListError, setWordListError]       = useState<string | null>(null);
   const [wordListInfo, setWordListInfo]         = useState<string | null>(null);
-
-  // Progress tracking for batch
-  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
     const uid = getOrCreateUserId();
@@ -580,17 +430,13 @@ export default function HomePage() {
     if (!uid) return;
     setHistLoad(true);
     try {
-      const d = await (
-        await fetch("/api/history", { headers: { "x-user-id": uid } })
-      ).json() as { history: HistoryItem[] };
+      const d = await (await fetch("/api/history", { headers: { "x-user-id": uid } })).json() as { history: HistoryItem[] };
       setHistory(d.history ?? []);
     } catch { /**/ }
     finally { setHistLoad(false); }
   }, []);
 
-  useEffect(() => {
-    if (userIdDisplay) void loadHistory();
-  }, [userIdDisplay, loadHistory]);
+  useEffect(() => { if (userIdDisplay) void loadHistory(); }, [userIdDisplay, loadHistory]);
 
   const clearHistory = useCallback(async () => {
     if (!clearOk) { setClearOk(true); setTimeout(() => setClearOk(false), 3000); return; }
@@ -612,9 +458,7 @@ export default function HomePage() {
     if (!u) return;
     setLoading(true); setError(null); setResult(null);
     try {
-      const res = await fetch(`/api/check-username?username=${encodeURIComponent(u)}`, {
-        headers: authHeaders(),
-      });
+      const res = await fetch(`/api/check-username?username=${encodeURIComponent(u)}`, { headers: authHeaders() });
       const d = await res.json() as CheckResult & { error?: string };
       if (!res.ok) setError(d.error ?? "Something went wrong");
       else { setResult(d as CheckResult); void loadHistory(); }
@@ -622,7 +466,6 @@ export default function HomePage() {
     finally { setLoading(false); }
   }, [input, loadHistory, authHeaders]);
 
-  // Helper: send usernames in chunks, updating progress as we go
   const checkInChunks = useCallback(async (
     usernames: string[],
     onProgress: (done: number, total: number, partial: CheckResult[]) => void
@@ -631,9 +474,7 @@ export default function HomePage() {
     for (let i = 0; i < usernames.length; i += API_CHUNK) {
       const chunk = usernames.slice(i, i + API_CHUNK);
       const res = await fetch("/api/check-username", {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ usernames: chunk }),
+        method: "POST", headers: authHeaders(), body: JSON.stringify({ usernames: chunk }),
       });
       const d = await res.json() as { results?: CheckResult[]; error?: string };
       if (!res.ok) throw new Error(d.error ?? "Something went wrong");
@@ -649,19 +490,11 @@ export default function HomePage() {
     if (lines.length > 1000) { setError("Max 1000 usernames."); return; }
     setLoading(true); setError(null); setBatchRes([]); setBatchSort("none");
     setBatchProgress({ done: 0, total: lines.length });
-
     try {
-      await checkInChunks(lines, (done, total, partial) => {
-        setBatchProgress({ done, total });
-        setBatchRes(partial);
-      });
+      await checkInChunks(lines, (done, total, partial) => { setBatchProgress({ done, total }); setBatchRes(partial); });
       void loadHistory();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Network error.");
-    } finally {
-      setLoading(false);
-      setBatchProgress(null);
-    }
+    } catch (e) { setError(e instanceof Error ? e.message : "Network error."); }
+    finally { setLoading(false); setBatchProgress(null); }
   }, [batchInput, loadHistory, checkInChunks]);
 
   const checkSweep = useCallback(async () => {
@@ -671,9 +504,7 @@ export default function HomePage() {
     setLoading(true); setError(null); setSweepRes([]); setSweepSort("none");
     try {
       const res = await fetch("/api/check-username", {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ usernames: cands }),
+        method: "POST", headers: authHeaders(), body: JSON.stringify({ usernames: cands }),
       });
       const d = await res.json() as { results?: CheckResult[]; error?: string };
       if (!res.ok) setError(d.error ?? "Something went wrong");
@@ -682,155 +513,80 @@ export default function HomePage() {
     finally { setLoading(false); }
   }, [sweepInput, sweepMode, loadHistory, authHeaders]);
 
-  // ── Parser: fetch word list via server proxy ───────────────────────────────
   const handleFetchWordList = useCallback(async () => {
     if (!wordListUrl.trim()) return;
-    setWordListFetching(true);
-    setWordListError(null);
-    setWordListInfo(null);
-    allWordsRef.current = [];
-    shownIndices.current = new Set();
-    setParserList([]);
-    setParserChecked([]);
-
+    setWordListFetching(true); setWordListError(null); setWordListInfo(null);
+    allWordsRef.current = []; shownIndices.current = new Set();
+    setParserList([]); setParserChecked([]);
     try {
-      const res = await fetch(
-        `/api/fetch-wordlist?url=${encodeURIComponent(wordListUrl.trim())}`
-      );
+      const res = await fetch(`/api/fetch-wordlist?url=${encodeURIComponent(wordListUrl.trim())}`);
       const data = await res.json() as { words?: string[]; total?: number; error?: string };
-      if (!res.ok || data.error) {
-        setWordListError(data.error ?? "Failed to load word list");
-      } else {
+      if (!res.ok || data.error) { setWordListError(data.error ?? "Failed to load word list"); }
+      else {
         allWordsRef.current = data.words ?? [];
         shownIndices.current = new Set();
-        setWordListInfo(
-          `✓ Loaded ${data.total ?? data.words?.length ?? 0} words · showing ${PAGE_SIZE} at a time without repeats`
-        );
+        setWordListInfo(`✓ Loaded ${data.total ?? data.words?.length ?? 0} words · showing ${PAGE_SIZE} at a time without repeats`);
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setWordListError(`Network error: ${msg}`);
-    } finally {
-      setWordListFetching(false);
-    }
+    } catch (e) { setWordListError(`Network error: ${e instanceof Error ? e.message : String(e)}`); }
+    finally { setWordListFetching(false); }
   }, [wordListUrl]);
 
   const handleNextPage = useCallback(() => {
     const all = allWordsRef.current;
-    if (!all.length) {
-      setWordListError("Load a word list first");
-      return;
-    }
-
+    if (!all.length) { setWordListError("Load a word list first"); return; }
     const available: number[] = [];
-    for (let i = 0; i < all.length; i++) {
-      if (!shownIndices.current.has(i)) available.push(i);
-    }
-
-    if (available.length === 0) {
-      setWordListError(`All ${all.length} words have been shown. Load a new list or reload the page.`);
-      return;
-    }
-
-    // Shuffle and pick PAGE_SIZE
+    for (let i = 0; i < all.length; i++) { if (!shownIndices.current.has(i)) available.push(i); }
+    if (available.length === 0) { setWordListError(`All ${all.length} words have been shown.`); return; }
     for (let i = available.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [available[i], available[j]] = [available[j], available[i]];
     }
-
     const picked = available.slice(0, PAGE_SIZE);
     picked.forEach(idx => shownIndices.current.add(idx));
-
-    const words = picked.map(idx => all[idx]);
-    setParserList(words);
-    setParserChecked([]);
-    setParserSort("none");
-    setParserProgress(null);
-    setWordListError(null);
+    setParserList(picked.map(idx => all[idx]));
+    setParserChecked([]); setParserSort("none"); setParserProgress(null); setWordListError(null);
   }, []);
 
   const handleCheckParsed = useCallback(async () => {
     if (!parserList.length) return;
-    setParserChecking(true);
-    setParserChecked([]);
-    setParserSort("none");
-    setParserProgress(null);
-
+    setParserChecking(true); setParserChecked([]); setParserSort("none"); setParserProgress(null);
     try {
-      let usernames: string[];
-      if (parserSweepMode !== "off") {
-        usernames = parserList.flatMap(w => buildSweepCandidates(w, parserSweepMode as SweepMode));
-      } else {
-        usernames = parserList;
-      }
-
+      const usernames = parserSweepMode !== "off"
+        ? parserList.flatMap(w => buildSweepCandidates(w, parserSweepMode as SweepMode))
+        : parserList;
       setParserProgress({ done: 0, total: usernames.length });
-
       const allResults = await checkInChunks(usernames, (done, total, partial) => {
-        setParserProgress({ done, total });
-        setParserChecked(partial);
+        setParserProgress({ done, total }); setParserChecked(partial);
       });
-
-      setParserChecked(allResults);
-      void loadHistory();
-    } catch (e) {
-      console.error("Parser check error:", e);
-    } finally {
-      setParserChecking(false);
-      setParserProgress(null);
-    }
+      setParserChecked(allResults); void loadHistory();
+    } catch (e) { console.error("Parser check error:", e); }
+    finally { setParserChecking(false); setParserProgress(null); }
   }, [parserList, parserSweepMode, loadHistory, checkInChunks]);
 
   const handleCopyParsed = useCallback(() => {
     navigator.clipboard.writeText(parserList.join("\n")).then(() => {
-      setParserCopied(true);
-      setTimeout(() => setParserCopied(false), 1500);
+      setParserCopied(true); setTimeout(() => setParserCopied(false), 1500);
     });
   }, [parserList]);
 
-  const fmtDate = (s: string) => {
-    try {
-      const d = new Date(s);
-      return isNaN(d.getTime()) ? s : d.toLocaleString("ru-RU", {
-        timeZone: "Europe/Moscow",
-        month: "short", day: "numeric",
-        hour: "2-digit", minute: "2-digit",
-      }).replace(",", "");
-    } catch { return s; }
-  };
-
   const TABS = [
-    { key: "single"   as const, label: "Single" },
-    { key: "batch"    as const, label: "Batch" },
-    { key: "sweep"    as const, label: "Sweep" },
-    { key: "parser"   as const, label: "Parser" },
-    { key: "history"  as const, label: "History" },
+    { key: "single" as const, label: "Single" }, { key: "batch" as const, label: "Batch" },
+    { key: "sweep" as const, label: "Sweep" }, { key: "parser" as const, label: "Parser" },
+    { key: "history" as const, label: "History" },
   ];
 
   const ghostBtn = (danger = false, active = false): React.CSSProperties => ({
     background: active ? (danger ? "rgba(240,64,64,0.08)" : C.bg3) : "transparent",
     border: `0.5px solid ${active ? (danger ? "rgba(240,64,64,0.35)" : C.lineHi) : C.line}`,
-    borderRadius: "2px",
-    padding: "4px 10px",
+    borderRadius: "2px", padding: "4px 10px",
     color: active ? (danger ? "#f04040" : C.t0) : C.t2,
-    fontSize: "11px",
-    fontWeight: 600,
-    cursor: "pointer",
-    display: "flex", alignItems: "center", gap: "5px",
-    transition: "all 100ms ease",
-    ...CSS.font,
+    fontSize: "11px", fontWeight: 600, cursor: "pointer",
+    display: "flex", alignItems: "center", gap: "5px", transition: "all 100ms ease", ...CSS.font,
   });
 
-  const sweepRequestCount = parserSweepMode === "off"
-    ? parserList.length
-    : parserSweepMode === "digit-suffix"
-      ? parserList.length * 11
-      : parserList.length * 27;
-
-  const remainingWords = allWordsRef.current.length > 0
-    ? allWordsRef.current.length - shownIndices.current.size
-    : 0;
-
+  const sweepRequestCount = parserSweepMode === "off" ? parserList.length
+    : parserSweepMode === "digit-suffix" ? parserList.length * 11 : parserList.length * 27;
+  const remainingWords = allWordsRef.current.length > 0 ? allWordsRef.current.length - shownIndices.current.size : 0;
   const batchLineCount = batchInput.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).length;
 
   return (
@@ -843,14 +599,11 @@ export default function HomePage() {
         @keyframes spin { to { transform: rotate(360deg); } }
         .animate-spin { animation: spin 0.7s linear infinite; }
         @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
-        * { box-sizing: border-box; }
-        textarea { box-sizing: border-box; }
+        * { box-sizing: border-box; } textarea { box-sizing: border-box; }
         ::selection { background: ${C.tonDim}; color: ${C.t0}; }
-        ::-webkit-scrollbar { width:3px; height:3px; }
-        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar { width:3px; height:3px; } ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: ${C.lineHi}; border-radius:0; }
-        input::placeholder { color: ${C.t2}; }
-        textarea::placeholder { color: ${C.t2}; }
+        input::placeholder { color: ${C.t2}; } textarea::placeholder { color: ${C.t2}; }
       `}</style>
 
       <div style={{ minHeight: "100vh", background: C.bg0, color: C.t0, display: "flex", flexDirection: "column" }}>
@@ -858,12 +611,8 @@ export default function HomePage() {
 
           {/* Header */}
           <div style={{ marginBottom: "24px", paddingBottom: "20px", borderBottom: `0.5px solid ${C.line}` }}>
-            <h1 style={{ fontSize: "18px", fontWeight: 700, margin: "0 0 5px", letterSpacing: "-0.01em", color: C.t0, ...CSS.font }}>
-              Username Tool
-            </h1>
-            <p style={{ fontSize: "12px", color: C.t2, margin: 0, ...CSS.font }}>
-              Search Fragment for available Telegram usernames. Real-time availability data.
-            </p>
+            <h1 style={{ fontSize: "18px", fontWeight: 700, margin: "0 0 5px", letterSpacing: "-0.01em", color: C.t0, ...CSS.font }}>Username Tool</h1>
+            <p style={{ fontSize: "12px", color: C.t2, margin: 0, ...CSS.font }}>Search Fragment for available Telegram usernames. Real-time availability data.</p>
           </div>
 
           {/* Tabs */}
@@ -871,45 +620,21 @@ export default function HomePage() {
             {TABS.map(({ key, label }) => {
               const active = mode === key;
               return (
-                <button key={key}
-                  onClick={() => { setMode(key); resetState(); if (key === "history") void loadHistory(); }}
-                  style={{
-                    padding: "7px 14px",
-                    border: "none",
-                    borderBottom: `1.5px solid ${active ? C.t0 : "transparent"}`,
-                    background: "transparent",
-                    color: active ? C.t0 : C.t2,
-                    fontWeight: active ? 700 : 400,
-                    fontSize: "12px",
-                    letterSpacing: "0.04em",
-                    cursor: "pointer",
-                    marginBottom: "-0.5px",
-                    transition: "color 100ms ease, border-color 100ms ease",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                    ...CSS.font,
-                  }}
-                >{label}</button>
+                <button key={key} onClick={() => { setMode(key); resetState(); if (key === "history") void loadHistory(); }} style={{
+                  padding: "7px 14px", border: "none", borderBottom: `1.5px solid ${active ? C.t0 : "transparent"}`,
+                  background: "transparent", color: active ? C.t0 : C.t2,
+                  fontWeight: active ? 700 : 400, fontSize: "12px", letterSpacing: "0.04em",
+                  cursor: "pointer", marginBottom: "-0.5px", transition: "color 100ms ease, border-color 100ms ease",
+                  whiteSpace: "nowrap", flexShrink: 0, ...CSS.font,
+                }}>{label}</button>
               );
             })}
           </div>
 
           {/* Error */}
           {error && (
-            <div style={{
-              padding: "9px 12px",
-              border: "0.5px solid rgba(240,64,64,0.3)",
-              background: "rgba(240,64,64,0.07)",
-              borderRadius: "2px",
-              color: "#f04040",
-              fontSize: "12px",
-              marginBottom: "14px",
-              display: "flex", alignItems: "flex-start", gap: "8px",
-              animation: "fadeUp 0.15s ease forwards",
-              ...CSS.font,
-            }}>
-              <span style={{ flexShrink: 0, marginTop: "1px" }}>✕</span>
-              <span>{error}</span>
+            <div style={{ padding: "9px 12px", border: "0.5px solid rgba(240,64,64,0.3)", background: "rgba(240,64,64,0.07)", borderRadius: "2px", color: "#f04040", fontSize: "12px", marginBottom: "14px", display: "flex", alignItems: "flex-start", gap: "8px", animation: "fadeUp 0.15s ease forwards", ...CSS.font }}>
+              <span style={{ flexShrink: 0, marginTop: "1px" }}>✕</span><span>{error}</span>
             </div>
           )}
 
@@ -918,14 +643,10 @@ export default function HomePage() {
             <div>
               <InputRow style={{ marginBottom: "5px" }}>
                 <span style={{ padding: "0 4px 0 13px", color: C.t2, fontSize: "15px", userSelect: "none", flexShrink: 0, ...CSS.font }}>@</span>
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={input}
+                <input ref={inputRef} type="text" value={input}
                   onChange={e => { setInput(e.target.value); setResult(null); setError(null); }}
                   onKeyDown={e => { if (e.key === "Enter") void checkSingle(); }}
-                  placeholder="username"
-                  autoFocus
+                  placeholder="username" autoFocus
                   autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
                   style={TEXT_INPUT}
                 />
@@ -936,18 +657,10 @@ export default function HomePage() {
               <p style={{ fontSize: "10px", color: C.t3, marginBottom: "24px", marginTop: "4px", ...CSS.font }}>
                 3–32 chars · letters, numbers, underscores · press Enter
               </p>
-
               {result && !error && (
                 <div style={{ border: `0.5px solid ${C.line}`, borderRadius: "2px", overflow: "hidden", background: C.bg1, animation: "fadeUp 0.15s ease forwards" }}>
-                  <div style={{
-                    padding: "8px 13px",
-                    background: C.bg2,
-                    borderBottom: `0.5px solid ${C.line}`,
-                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
-                  }}>
-                    <span style={{ fontSize: "10px", color: C.t2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...CSS.font }}>
-                      fragment.com/username/{result.username}
-                    </span>
+                  <div style={{ padding: "8px 13px", background: C.bg2, borderBottom: `0.5px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                    <span style={{ fontSize: "10px", color: C.t2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...CSS.font }}>fragment.com/username/{result.username}</span>
                     <StatusPill status={result.status} />
                   </div>
                   <div style={{ padding: "14px 13px" }}>
@@ -958,14 +671,8 @@ export default function HomePage() {
                           <span style={{ fontSize: "15px", fontWeight: 700, color: C.t0, ...CSS.font }}>@{result.username}</span>
                           {result.hasPremium && <PremiumStar />}
                         </div>
-                        {result.name && (
-                          <div style={{ fontSize: "12px", color: C.t1, marginTop: "2px", ...CSS.font }}>{result.name}</div>
-                        )}
-                        {result.status === "Reserved" && (
-                          <div style={{ fontSize: "11px", color: "#6b8cff", marginTop: "4px", ...CSS.font }}>
-                            Reserved by Telegram · cannot be registered
-                          </div>
-                        )}
+                        {result.name && <div style={{ fontSize: "12px", color: C.t1, marginTop: "2px", ...CSS.font }}>{result.name}</div>}
+                        {result.status === "Reserved" && <div style={{ fontSize: "11px", color: "#6b8cff", marginTop: "4px", ...CSS.font }}>Reserved by Telegram · cannot be registered</div>}
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
@@ -973,33 +680,19 @@ export default function HomePage() {
                         { href: `https://fragment.com/username/${result.username}`, label: "View on Fragment", icon: <TonLogo size={11} /> },
                         { href: `https://t.me/${result.username}`, label: "Open in Telegram", icon: null },
                       ].map(({ href, label, icon }) => (
-                        <a key={href} href={href} target="_blank" rel="noopener noreferrer"
-                          style={{
-                            display: "inline-flex", alignItems: "center", gap: "5px",
-                            padding: "5px 10px",
-                            border: `0.5px solid ${C.line}`,
-                            borderRadius: "2px",
-                            background: C.bg2,
-                            color: C.t1,
-                            textDecoration: "none",
-                            fontSize: "11px",
-                            fontWeight: 600,
-                            transition: "background 100ms ease, border-color 100ms ease",
-                            ...CSS.font,
-                          }}
+                        <a key={href} href={href} target="_blank" rel="noopener noreferrer" style={{
+                          display: "inline-flex", alignItems: "center", gap: "5px", padding: "5px 10px",
+                          border: `0.5px solid ${C.line}`, borderRadius: "2px", background: C.bg2, color: C.t1,
+                          textDecoration: "none", fontSize: "11px", fontWeight: 600,
+                          transition: "background 100ms ease, border-color 100ms ease", ...CSS.font,
+                        }}
                           onMouseEnter={e => { e.currentTarget.style.background = C.bg3; e.currentTarget.style.borderColor = C.lineHi; }}
                           onMouseLeave={e => { e.currentTarget.style.background = C.bg2; e.currentTarget.style.borderColor = C.line; }}
-                        >
-                          {icon}{label}
-                        </a>
+                        >{icon}{label}</a>
                       ))}
                     </div>
                   </div>
-                  {result.source && (
-                    <div style={{ padding: "5px 13px", borderTop: `0.5px solid ${C.line}`, background: C.bg2, fontSize: "10px", color: C.t3, ...CSS.font }}>
-                      source: {result.source}
-                    </div>
-                  )}
+                  {result.source && <div style={{ padding: "5px 13px", borderTop: `0.5px solid ${C.line}`, background: C.bg2, fontSize: "10px", color: C.t3, ...CSS.font }}>source: {result.source}</div>}
                 </div>
               )}
             </div>
@@ -1009,42 +702,18 @@ export default function HomePage() {
           {mode === "batch" && (
             <div>
               <div style={{ border: `0.5px solid ${C.line}`, borderRadius: "2px", overflow: "hidden", marginBottom: "10px", background: C.bg1 }}>
-                <div style={{
-                  padding: "6px 12px",
-                  background: C.bg2,
-                  borderBottom: `0.5px solid ${C.line}`,
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                }}>
+                <div style={{ padding: "6px 12px", background: C.bg2, borderBottom: `0.5px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: "10px", color: C.t2, letterSpacing: "0.04em", ...CSS.font }}>One username per line, or comma/semicolon separated</span>
                   <span style={{ fontSize: "11px", color: C.t1, fontWeight: 600, ...CSS.font }}>
-                    {batchLineCount}
-                    <span style={{ color: batchLineCount > 1000 ? "#f04040" : C.t3, fontWeight: 400 }}>/1000</span>
+                    {batchLineCount}<span style={{ color: batchLineCount > 1000 ? "#f04040" : C.t3, fontWeight: 400 }}>/1000</span>
                   </span>
                 </div>
-                <textarea
-                  value={batchInput}
-                  onChange={e => { setBatchInput(e.target.value); setError(null); setBatchRes([]); }}
-                  placeholder={"username1\nusername2\nusername3"}
-                  rows={8}
-                  style={{
-                    width: "100%",
-                    background: C.bg1,
-                    border: "none", outline: "none",
-                    color: C.t0,
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    padding: "10px 12px",
-                    resize: "vertical",
-                    lineHeight: 1.7,
-                    ...CSS.font,
-                  }}
+                <textarea value={batchInput} onChange={e => { setBatchInput(e.target.value); setError(null); setBatchRes([]); }}
+                  placeholder={"username1\nusername2\nusername3"} rows={8}
+                  style={{ width: "100%", background: C.bg1, border: "none", outline: "none", color: C.t0, fontSize: "13px", fontWeight: 600, padding: "10px 12px", resize: "vertical", lineHeight: 1.7, ...CSS.font }}
                 />
               </div>
-
-              {batchProgress && (
-                <ProgressBar done={batchProgress.done} total={batchProgress.total} label="Checking batch…" />
-              )}
-
+              {batchProgress && <ProgressBar done={batchProgress.done} total={batchProgress.total} label="Checking batch…" />}
               <div style={{ marginBottom: "18px" }}>
                 <InputRow>
                   <PrimaryBtn onClick={() => void checkBatch()} disabled={loading || !batchInput.trim()} loading={loading}>
@@ -1059,32 +728,18 @@ export default function HomePage() {
           {/* ── Sweep ── */}
           {mode === "sweep" && (
             <div>
-              <div style={{
-                padding: "9px 12px",
-                background: C.tonDim,
-                border: `0.5px solid rgba(0,152,234,0.25)`,
-                borderRadius: "2px",
-                fontSize: "12px",
-                color: C.t1,
-                marginBottom: "18px",
-                lineHeight: 1.55,
-                ...CSS.font,
-              }}>
+              <div style={{ padding: "9px 12px", background: C.tonDim, border: `0.5px solid rgba(0,152,234,0.25)`, borderRadius: "2px", fontSize: "12px", color: C.t1, marginBottom: "18px", lineHeight: 1.55, ...CSS.font }}>
                 {sweepMode === "digit-suffix"
                   ? <>Checks the exact username + all 10 digit variants (0–9). <span style={{ color: C.t0, fontWeight: 700 }}>11 requests total.</span></>
                   : <>Checks the exact username + all 26 letter variants (a–z). <span style={{ color: C.t0, fontWeight: 700 }}>27 requests total.</span> <span style={{ color: C.ton }}>Blue dot = commonly available suffix.</span></>
                 }
               </div>
-
               <InputRow style={{ marginBottom: "9px" }}>
                 <span style={{ padding: "0 4px 0 13px", color: C.t2, fontSize: "15px", userSelect: "none", flexShrink: 0, ...CSS.font }}>@</span>
-                <input
-                  type="text"
-                  value={sweepInput}
+                <input type="text" value={sweepInput}
                   onChange={e => { setSweepInput(e.target.value); setError(null); setSweepRes([]); }}
                   onKeyDown={e => { if (e.key === "Enter") void checkSweep(); }}
-                  placeholder="username"
-                  autoFocus
+                  placeholder="username" autoFocus
                   autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
                   style={TEXT_INPUT}
                 />
@@ -1092,20 +747,11 @@ export default function HomePage() {
                   {loading ? "Sweeping…" : "Sweep"}
                 </PrimaryBtn>
               </InputRow>
-
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginBottom: "14px" }}>
-                <SegmentedControl<SweepMode>
-                  label="Mode"
-                  value={sweepMode}
-                  onChange={v => { setSweepMode(v); setSweepRes([]); }}
-                  options={[
-                    { k: "alpha-suffix", label: "word + a" },
-                    { k: "alpha-prefix", label: "a + word" },
-                    { k: "digit-suffix", label: "word + 1" },
-                  ]}
+                <SegmentedControl<SweepMode> label="Mode" value={sweepMode} onChange={v => { setSweepMode(v); setSweepRes([]); }}
+                  options={[{ k: "alpha-suffix", label: "word + a" }, { k: "alpha-prefix", label: "a + word" }, { k: "digit-suffix", label: "word + 1" }]}
                 />
               </div>
-
               {sweepRes.length > 0 && (
                 <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
                   {sweepRes[0] && (
@@ -1118,11 +764,7 @@ export default function HomePage() {
                   )}
                   {sweepRes.length > 1 && (
                     <div>
-                      <SweepVariantGrid
-                        base={sweepInput.trim().replace(/^@/, "").toLowerCase()}
-                        mode={sweepMode}
-                        results={sweepRes.slice(1)}
-                      />
+                      <SweepVariantGrid base={sweepInput.trim().replace(/^@/, "").toLowerCase()} mode={sweepMode} results={sweepRes.slice(1)} />
                       <Results results={sweepRes.slice(1)} sort={sweepSort} setSort={setSweepSort} />
                     </div>
                   )}
@@ -1134,110 +776,41 @@ export default function HomePage() {
           {/* ── Parser ── */}
           {mode === "parser" && (
             <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
-              <div style={{
-                padding: "9px 12px",
-                background: C.tonDim,
-                border: `0.5px solid rgba(0,152,234,0.25)`,
-                borderRadius: "2px",
-                fontSize: "12px",
-                color: C.t1,
-                marginBottom: "20px",
-                lineHeight: 1.55,
-                ...CSS.font,
-              }}>
-                Load a word list from a URL (Pastebin or any raw text). Each click of "Next 100" shows a new batch without repeats — works for lists with thousands of words.
+              <div style={{ padding: "9px 12px", background: C.tonDim, border: `0.5px solid rgba(0,152,234,0.25)`, borderRadius: "2px", fontSize: "12px", color: C.t1, marginBottom: "20px", lineHeight: 1.55, ...CSS.font }}>
+                Load a word list from a URL (Pastebin or any raw text). Each click of &quot;Next 100&quot; shows a new batch without repeats.
               </div>
-
-              {/* Word list URL */}
-              <div style={{
-                background: C.bg1,
-                border: `0.5px solid ${C.line}`,
-                borderRadius: "2px",
-                overflow: "hidden",
-                marginBottom: "14px",
-              }}>
-                <div style={{
-                  background: C.bg2, borderBottom: `0.5px solid ${C.line}`,
-                  padding: "7px 13px",
-                  fontSize: "10px", color: C.t3, letterSpacing: "0.06em", ...CSS.font,
-                }}>
-                  source · pastebin / raw url
-                </div>
+              <div style={{ background: C.bg1, border: `0.5px solid ${C.line}`, borderRadius: "2px", overflow: "hidden", marginBottom: "14px" }}>
+                <div style={{ background: C.bg2, borderBottom: `0.5px solid ${C.line}`, padding: "7px 13px", fontSize: "10px", color: C.t3, letterSpacing: "0.06em", ...CSS.font }}>source · pastebin / raw url</div>
                 <div style={{ padding: "14px" }}>
                   <div style={{ display: "flex", gap: "6px" }}>
-                    <input
-                      type="text"
-                      value={wordListUrl}
-                      onChange={e => {
-                        setWordListUrl(e.target.value);
-                        setWordListError(null);
-                        setWordListInfo(null);
-                        allWordsRef.current = [];
-                        shownIndices.current = new Set();
-                      }}
+                    <input type="text" value={wordListUrl}
+                      onChange={e => { setWordListUrl(e.target.value); setWordListError(null); setWordListInfo(null); allWordsRef.current = []; shownIndices.current = new Set(); }}
                       onKeyDown={e => { if (e.key === "Enter") void handleFetchWordList(); }}
                       placeholder="https://pastebin.com/xxxxxxxx"
-                      style={{
-                        flex: 1,
-                        background: C.bg2,
-                        border: `0.5px solid ${wordListError ? "rgba(240,64,64,0.4)" : C.line}`,
-                        borderRadius: "2px",
-                        padding: "7px 10px",
-                        color: C.t0,
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        outline: "none",
-                        ...CSS.font,
-                      }}
+                      style={{ flex: 1, background: C.bg2, border: `0.5px solid ${wordListError ? "rgba(240,64,64,0.4)" : C.line}`, borderRadius: "2px", padding: "7px 10px", color: C.t0, fontSize: "12px", fontWeight: 600, outline: "none", ...CSS.font }}
                     />
-                    <button
-                      onClick={() => void handleFetchWordList()}
-                      disabled={wordListFetching || !wordListUrl.trim()}
-                      style={{
-                        padding: "0 14px",
-                        background: wordListFetching || !wordListUrl.trim() ? "rgba(240,240,242,0.05)" : C.tonDim,
-                        border: `0.5px solid ${wordListFetching || !wordListUrl.trim() ? C.line : "rgba(0,152,234,0.3)"}`,
-                        borderRadius: "2px",
-                        color: wordListFetching || !wordListUrl.trim() ? C.t3 : C.ton,
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        cursor: wordListFetching || !wordListUrl.trim() ? "not-allowed" : "pointer",
-                        whiteSpace: "nowrap",
-                        display: "flex", alignItems: "center", gap: "5px",
-                        transition: "all 100ms ease",
-                        ...CSS.font,
-                      }}
-                    >
+                    <button onClick={() => void handleFetchWordList()} disabled={wordListFetching || !wordListUrl.trim()} style={{
+                      padding: "0 14px",
+                      background: wordListFetching || !wordListUrl.trim() ? "rgba(240,240,242,0.05)" : C.tonDim,
+                      border: `0.5px solid ${wordListFetching || !wordListUrl.trim() ? C.line : "rgba(0,152,234,0.3)"}`,
+                      borderRadius: "2px", color: wordListFetching || !wordListUrl.trim() ? C.t3 : C.ton,
+                      fontSize: "11px", fontWeight: 700, cursor: wordListFetching || !wordListUrl.trim() ? "not-allowed" : "pointer",
+                      whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "5px", transition: "all 100ms ease", ...CSS.font,
+                    }}>
                       {wordListFetching ? <><Spinner size={10} />Loading…</> : "Load"}
                     </button>
                   </div>
-                  {wordListError && (
-                    <div style={{ fontSize: "11px", color: "#f04040", marginTop: "6px", ...CSS.font }}>✕ {wordListError}</div>
-                  )}
-                  {wordListInfo && !wordListError && (
-                    <div style={{ fontSize: "11px", color: "#35c96b", marginTop: "6px", ...CSS.font }}>{wordListInfo}</div>
-                  )}
+                  {wordListError && <div style={{ fontSize: "11px", color: "#f04040", marginTop: "6px", ...CSS.font }}>✕ {wordListError}</div>}
+                  {wordListInfo && !wordListError && <div style={{ fontSize: "11px", color: "#35c96b", marginTop: "6px", ...CSS.font }}>{wordListInfo}</div>}
                 </div>
               </div>
-
-              {/* Next page button */}
               <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
-                <button
-                  onClick={handleNextPage}
-                  disabled={!allWordsRef.current.length}
-                  style={{
-                    background: allWordsRef.current.length ? C.t0 : "rgba(240,240,242,0.05)",
-                    color: allWordsRef.current.length ? C.bg0 : C.t3,
-                    border: "none",
-                    borderRadius: "2px",
-                    padding: "9px 20px",
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    letterSpacing: "0.05em",
-                    cursor: allWordsRef.current.length ? "pointer" : "not-allowed",
-                    transition: "background 120ms ease",
-                    ...CSS.font,
-                  }}
+                <button onClick={handleNextPage} disabled={!allWordsRef.current.length} style={{
+                  background: allWordsRef.current.length ? C.t0 : "rgba(240,240,242,0.05)",
+                  color: allWordsRef.current.length ? C.bg0 : C.t3, border: "none", borderRadius: "2px",
+                  padding: "9px 20px", fontSize: "12px", fontWeight: 700, letterSpacing: "0.05em",
+                  cursor: allWordsRef.current.length ? "pointer" : "not-allowed", transition: "background 120ms ease", ...CSS.font,
+                }}
                   onMouseEnter={e => { if (allWordsRef.current.length) (e.currentTarget as HTMLButtonElement).style.background = "rgba(240,240,242,0.85)"; }}
                   onMouseLeave={e => { if (allWordsRef.current.length) (e.currentTarget as HTMLButtonElement).style.background = C.t0; }}
                 >
@@ -1248,97 +821,45 @@ export default function HomePage() {
                     remaining <span style={{ color: remainingWords === 0 ? "#f04040" : C.t0, fontWeight: 700 }}>{remainingWords}</span> of {allWordsRef.current.length}
                   </span>
                 )}
-                {!allWordsRef.current.length && (
-                  <span style={{ fontSize: "10px", color: C.t3, ...CSS.font }}>load a word list first</span>
-                )}
+                {!allWordsRef.current.length && <span style={{ fontSize: "10px", color: C.t3, ...CSS.font }}>load a word list first</span>}
               </div>
 
-              {/* Parser list */}
               {parserList.length > 0 && (
                 <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
-                  {/* Sweep mode */}
-                  <div style={{
-                    background: C.bg1,
-                    border: `0.5px solid ${C.line}`,
-                    borderRadius: "2px",
-                    overflow: "hidden",
-                    marginBottom: "10px",
-                  }}>
-                    <div style={{
-                      background: C.bg2, borderBottom: `0.5px solid ${C.line}`,
-                      padding: "7px 13px",
-                      fontSize: "10px", color: C.t3, letterSpacing: "0.06em", ...CSS.font,
-                    }}>
-                      check mode
-                    </div>
+                  <div style={{ background: C.bg1, border: `0.5px solid ${C.line}`, borderRadius: "2px", overflow: "hidden", marginBottom: "10px" }}>
+                    <div style={{ background: C.bg2, borderBottom: `0.5px solid ${C.line}`, padding: "7px 13px", fontSize: "10px", color: C.t3, letterSpacing: "0.06em", ...CSS.font }}>check mode</div>
                     <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                      <SegmentedControl<GenSweepMode>
-                        label="Sweep"
-                        value={parserSweepMode}
+                      <SegmentedControl<GenSweepMode> label="Sweep" value={parserSweepMode}
                         onChange={v => { setParserSweepMode(v); setParserChecked([]); }}
-                        options={[
-                          { k: "off",          label: "Exact" },
-                          { k: "alpha-suffix", label: "word + a–z" },
-                          { k: "alpha-prefix", label: "a–z + word" },
-                          { k: "digit-suffix", label: "word + 0–9" },
-                        ]}
+                        options={[{ k: "off", label: "Exact" }, { k: "alpha-suffix", label: "word + a–z" }, { k: "alpha-prefix", label: "a–z + word" }, { k: "digit-suffix", label: "word + 0–9" }]}
                       />
                       {parserSweepMode !== "off" && (
                         <div style={{ fontSize: "10px", color: C.t2, ...CSS.font }}>
-                          {sweepRequestCount} requests total · sent in chunks of {API_CHUNK} · retries on rate-limit
+                          {sweepRequestCount} requests · chunks of {API_CHUNK} · auto-retry on rate-limit
                         </div>
                       )}
                     </div>
                   </div>
-
-                  {/* Action bar */}
                   <div style={{ display: "flex", gap: "5px", marginBottom: "10px", flexWrap: "wrap" }}>
                     <button onClick={handleCopyParsed} style={ghostBtn(false, parserCopied)}>
                       {parserCopied ? "✓ Copied" : "Copy"}
                     </button>
-                    <button
-                      onClick={() => void handleCheckParsed()}
-                      disabled={parserChecking}
-                      style={{
-                        ...ghostBtn(),
-                        background: parserChecking ? "transparent" : C.tonDim,
-                        borderColor: parserChecking ? C.line : "rgba(0,152,234,0.3)",
-                        color: parserChecking ? C.t2 : C.ton,
-                        cursor: parserChecking ? "not-allowed" : "pointer",
-                      }}
-                    >
+                    <button onClick={() => void handleCheckParsed()} disabled={parserChecking} style={{
+                      ...ghostBtn(), background: parserChecking ? "transparent" : C.tonDim,
+                      borderColor: parserChecking ? C.line : "rgba(0,152,234,0.3)",
+                      color: parserChecking ? C.t2 : C.ton, cursor: parserChecking ? "not-allowed" : "pointer",
+                    }}>
                       {parserChecking ? <><Spinner size={10} />Checking…</> : "Check availability"}
                     </button>
-                    <span style={{ fontSize: "11px", color: C.t2, display: "flex", alignItems: "center", marginLeft: "4px", ...CSS.font }}>
-                      {parserList.length} words
-                    </span>
+                    <span style={{ fontSize: "11px", color: C.t2, display: "flex", alignItems: "center", marginLeft: "4px", ...CSS.font }}>{parserList.length} words</span>
                   </div>
-
-                  {/* Progress bar for parser */}
-                  {parserProgress && (
-                    <ProgressBar
-                      done={parserProgress.done}
-                      total={parserProgress.total}
-                      label={`Checking${parserSweepMode !== "off" ? " (sweep)" : ""}…`}
-                    />
-                  )}
-
+                  {parserProgress && <ProgressBar done={parserProgress.done} total={parserProgress.total} label={`Checking${parserSweepMode !== "off" ? " (sweep)" : ""}…`} />}
                   {parserChecked.length > 0 ? (
                     <Results results={parserChecked} sort={parserSort} setSort={setParserSort} />
                   ) : (
                     <div style={{ border: `0.5px solid ${C.line}`, borderRadius: "2px", overflow: "hidden", background: C.bg1 }}>
                       {parserList.map((u, i) => (
-                        <div
-                          key={u + i}
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "28px 1fr 14px",
-                            alignItems: "center",
-                            padding: "7px 13px",
-                            gap: "10px",
-                            ...(i < parserList.length - 1 ? ROW_BORDER : {}),
-                            transition: "background 100ms ease",
-                          }}
+                        <div key={u + i} style={{ display: "grid", gridTemplateColumns: "28px 1fr 14px", alignItems: "center", padding: "7px 13px", gap: "10px", ...(i < parserList.length - 1 ? ROW_BORDER : {}), transition: "background 100ms ease" }}
                           onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.background = C.bg3)}
                           onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
                         >
@@ -1351,18 +872,8 @@ export default function HomePage() {
                   )}
                 </div>
               )}
-
               {parserList.length === 0 && allWordsRef.current.length === 0 && (
-                <div style={{
-                  padding: "40px 16px",
-                  textAlign: "center",
-                  border: `0.5px solid ${C.line}`,
-                  borderRadius: "2px",
-                  color: C.t2,
-                  fontSize: "12px",
-                  background: C.bg1,
-                  ...CSS.font,
-                }}>
+                <div style={{ padding: "40px 16px", textAlign: "center", border: `0.5px solid ${C.line}`, borderRadius: "2px", color: C.t2, fontSize: "12px", background: C.bg1, ...CSS.font }}>
                   Load a word list from a URL to get started
                 </div>
               )}
@@ -1373,16 +884,7 @@ export default function HomePage() {
           {mode === "history" && (
             <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                <div>
-                  <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.04em", color: C.t2, ...CSS.font }}>
-                    Your recent checks
-                  </span>
-                  {userIdDisplay && (
-                    <div style={{ fontSize: "9px", color: C.t3, marginTop: "2px", letterSpacing: "0.04em", ...CSS.font }}>
-                      private · stored by device ID · times in MSK
-                    </div>
-                  )}
-                </div>
+                <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.04em", color: C.t2, ...CSS.font }}>Recent checks</span>
                 <div style={{ display: "flex", gap: "3px" }}>
                   <button onClick={() => void loadHistory()} style={ghostBtn()}>
                     {histLoad ? <Spinner size={10} /> : (
@@ -1401,31 +903,11 @@ export default function HomePage() {
                 </div>
               </div>
               {history.length === 0 ? (
-                <div style={{
-                  padding: "40px 16px",
-                  textAlign: "center",
-                  border: `0.5px solid ${C.line}`,
-                  borderRadius: "2px",
-                  color: C.t2,
-                  fontSize: "12px",
-                  background: C.bg1,
-                  ...CSS.font,
-                }}>
-                  No checks yet.
-                </div>
+                <div style={{ padding: "40px 16px", textAlign: "center", border: `0.5px solid ${C.line}`, borderRadius: "2px", color: C.t2, fontSize: "12px", background: C.bg1, ...CSS.font }}>No checks yet.</div>
               ) : (
                 <div style={{ border: `0.5px solid ${C.line}`, borderRadius: "2px", overflow: "hidden", background: C.bg1 }}>
                   {history.map((item, i) => (
-                    <div key={item.id}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "24px 1fr auto 14px",
-                        alignItems: "center",
-                        padding: "8px 13px",
-                        gap: "10px",
-                        ...(i < history.length - 1 ? ROW_BORDER : {}),
-                        transition: "background 100ms ease",
-                      }}
+                    <div key={item.id} style={{ display: "grid", gridTemplateColumns: "24px 1fr auto 14px", alignItems: "center", padding: "8px 13px", gap: "10px", ...(i < history.length - 1 ? ROW_BORDER : {}), transition: "background 100ms ease" }}
                       onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.background = C.bg3)}
                       onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
                     >
@@ -1446,24 +928,16 @@ export default function HomePage() {
           )}
         </main>
 
-        <footer style={{
-          borderTop: `0.5px solid ${C.line}`,
-          padding: "10px 24px",
-          background: C.bg1,
-        }}>
+        <footer style={{ borderTop: `0.5px solid ${C.line}`, padding: "10px 24px", background: C.bg1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             <TonLogo size={11} />
             <span style={{ fontSize: "10px", color: C.t3, ...CSS.font }}>Unofficial tool · Not affiliated with Telegram or Fragment</span>
             <span style={{ color: C.t3, fontSize: "10px" }}>·</span>
-            <a
-              href="https://fragment.com"
-              target="_blank" rel="noopener noreferrer"
+            <a href="https://fragment.com" target="_blank" rel="noopener noreferrer"
               style={{ fontSize: "10px", color: C.t2, textDecoration: "none", transition: "color 100ms ease", ...CSS.font }}
               onMouseEnter={e => (e.currentTarget.style.color = C.t0)}
               onMouseLeave={e => (e.currentTarget.style.color = C.t2)}
-            >
-              fragment.com
-            </a>
+            >fragment.com</a>
           </div>
         </footer>
       </div>

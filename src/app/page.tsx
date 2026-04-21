@@ -48,6 +48,9 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string; bor
 const getS = (s: string) =>
   STATUS_CFG[s] ?? { label: s, color: "#7a7a88", bg: "rgba(120,120,136,0.10)", border: "rgba(120,120,136,0.22)", dot: "#7a7a88" };
 
+// Statuses considered "available / free" for download
+const FREE_STATUSES = new Set(["Available"]);
+
 const STATUS_ORDER = ["Available", "For Sale", "Reserved", "Sold", "Taken", "Unknown", "Invalid"];
 const ALPHA  = "abcdefghijklmnopqrstuvwxyz".split("");
 const DIGITS = "0123456789".split("");
@@ -77,6 +80,20 @@ function fmtDate(s: string) {
     if (isNaN(d.getTime())) return s;
     return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   } catch { return s; }
+}
+
+// Download available usernames as .txt
+function downloadAvailable(results: CheckResult[], filename = "available_usernames.txt") {
+  const available = results.filter(r => FREE_STATUSES.has(r.status)).map(r => r.username);
+  if (!available.length) return false;
+  const blob = new Blob([available.join("\n")], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  return true;
 }
 
 // ── Components ────────────────────────────────────────────────────────────────
@@ -199,21 +216,43 @@ function StatsPills({ results }: { results: CheckResult[] }) {
   );
 }
 
-function SortBar({ sort, setSort }: { sort: Sort; setSort: (s: Sort) => void }) {
+function SortBar({ sort, setSort, results }: { sort: Sort; setSort: (s: Sort) => void; results: CheckResult[] }) {
   const opts: { k: Sort; label: string }[] = [
     { k: "none", label: "Default" }, { k: "az", label: "A → Z" },
     { k: "za", label: "Z → A" }, { k: "group", label: "Group" },
   ];
+  const availableCount = results.filter(r => FREE_STATUSES.has(r.status)).length;
   return (
-    <div style={{ display: "flex", gap: "2px", alignItems: "center", justifyContent: "flex-end", marginBottom: "8px" }}>
-      <span style={{ fontSize: "10px", color: C.t2, marginRight: "4px", letterSpacing: "0.06em", ...CSS.font }}>Sort</span>
-      {opts.map(({ k, label }) => (
-        <button key={k} onClick={() => setSort(k)} style={{
-          background: sort === k ? C.bg3 : "transparent", border: `0.5px solid ${sort === k ? C.lineHi : C.line}`,
-          borderRadius: "2px", padding: "2px 8px", color: sort === k ? C.t0 : C.t2,
-          fontSize: "11px", fontWeight: sort === k ? 700 : 400, cursor: "pointer", transition: "all 100ms ease", ...CSS.font,
-        }}>{label}</button>
-      ))}
+    <div style={{ display: "flex", gap: "2px", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: "2px", alignItems: "center" }}>
+        <span style={{ fontSize: "10px", color: C.t2, marginRight: "4px", letterSpacing: "0.06em", ...CSS.font }}>Sort</span>
+        {opts.map(({ k, label }) => (
+          <button key={k} onClick={() => setSort(k)} style={{
+            background: sort === k ? C.bg3 : "transparent", border: `0.5px solid ${sort === k ? C.lineHi : C.line}`,
+            borderRadius: "2px", padding: "2px 8px", color: sort === k ? C.t0 : C.t2,
+            fontSize: "11px", fontWeight: sort === k ? 700 : 400, cursor: "pointer", transition: "all 100ms ease", ...CSS.font,
+          }}>{label}</button>
+        ))}
+      </div>
+      {availableCount > 0 && (
+        <button
+          onClick={() => downloadAvailable(results)}
+          style={{
+            display: "flex", alignItems: "center", gap: "5px",
+            background: "rgba(53,201,107,0.08)", border: "0.5px solid rgba(53,201,107,0.28)",
+            borderRadius: "2px", padding: "3px 10px", color: "#35c96b",
+            fontSize: "11px", fontWeight: 600, cursor: "pointer", transition: "all 100ms ease", ...CSS.font,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = "rgba(53,201,107,0.15)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "rgba(53,201,107,0.08)"; }}
+          title="Download available usernames as .txt"
+        >
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+            <path d="M6 1v7M3 5l3 3 3-3M1 10h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          {availableCount} available
+        </button>
+      )}
     </div>
   );
 }
@@ -249,7 +288,7 @@ function Results({ results, sort, setSort }: { results: CheckResult[]; sort: Sor
   return (
     <div style={{ animation: "fadeUp 0.15s ease forwards" }}>
       <StatsPills results={results} />
-      <SortBar sort={sort} setSort={setSort} />
+      <SortBar sort={sort} setSort={setSort} results={results} />
       {sort === "group" && grouped ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {grouped.map(g => (
@@ -317,18 +356,27 @@ function SegmentedControl<T extends string>({ label, options, value, onChange }:
   );
 }
 
-function ProgressBar({ done, total, label }: { done: number; total: number; label?: string }) {
+function ProgressBar({ done, total, label, paused }: { done: number; total: number; label?: string; paused?: boolean }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   return (
     <div style={{ marginBottom: "10px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-        <span style={{ fontSize: "10px", color: C.t2, ...CSS.font }}>{label ?? "Checking…"}</span>
+        <span style={{ fontSize: "10px", color: paused ? "#e8a030" : C.t2, display: "flex", alignItems: "center", gap: "5px", ...CSS.font }}>
+          {paused && (
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#e8a030", display: "inline-block" }} />
+          )}
+          {paused ? "Paused — switch back to resume" : (label ?? "Checking…")}
+        </span>
         <span style={{ fontSize: "10px", color: C.t1, fontWeight: 600, ...CSS.font }}>
           {done} / {total} <span style={{ color: C.t3, fontWeight: 400 }}>({pct}%)</span>
         </span>
       </div>
       <div style={{ height: "2px", background: C.bg3, borderRadius: "1px", overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: C.ton, borderRadius: "1px", transition: "width 200ms ease" }} />
+        <div style={{
+          height: "100%", width: `${pct}%`,
+          background: paused ? "#e8a030" : C.ton,
+          borderRadius: "1px", transition: "width 200ms ease",
+        }} />
       </div>
     </div>
   );
@@ -397,6 +445,16 @@ export default function HomePage() {
   const [clearOk, setClearOk]       = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Pause/stop state
+  const [isPaused, setIsPaused]   = useState(false);
+  const [isStopped, setIsStopped] = useState(false);
+  const pausedRef   = useRef(false);
+  const stoppedRef  = useRef(false);
+  // Queue state for resume capability
+  const pendingQueueRef   = useRef<string[]>([]);
+  const partialResultsRef = useRef<CheckResult[]>([]);
+  const activeCheckMode   = useRef<"batch" | "parser" | null>(null);
+
   const allWordsRef  = useRef<string[]>([]);
   const shownIndices = useRef<Set<number>>(new Set());
 
@@ -419,6 +477,26 @@ export default function HomePage() {
     userIdRef.current = uid;
     setUserIdDisplay(uid);
   }, []);
+
+  // ── Pause on tab hide / resume on tab show ──────────────────────────────
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (loading) {
+          pausedRef.current = true;
+          setIsPaused(true);
+        }
+      } else {
+        if (pausedRef.current) {
+          pausedRef.current = false;
+          setIsPaused(false);
+          // Resume will be handled by the polling loop below
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [loading]);
 
   const authHeaders = useCallback((): HeadersInit => ({
     "Content-Type": "application/json",
@@ -451,20 +529,73 @@ export default function HomePage() {
     setParserList([]); setParserChecked([]); setError(null);
     setWordListError(null); setWordListInfo(null);
     setBatchProgress(null); setParserProgress(null);
+    setIsPaused(false); setIsStopped(false);
+    pausedRef.current = false; stoppedRef.current = false;
+    pendingQueueRef.current = []; partialResultsRef.current = [];
+    activeCheckMode.current = null;
   };
 
-  const checkSingle = useCallback(async () => {
-    const u = input.trim().replace(/^@/, "").toLowerCase();
-    if (!u) return;
-    setLoading(true); setError(null); setResult(null);
-    try {
-      const res = await fetch(`/api/check-username?username=${encodeURIComponent(u)}`, { headers: authHeaders() });
-      const d = await res.json() as CheckResult & { error?: string };
-      if (!res.ok) setError(d.error ?? "Something went wrong");
-      else { setResult(d as CheckResult); void loadHistory(); }
-    } catch { setError("Network error."); }
-    finally { setLoading(false); }
-  }, [input, loadHistory, authHeaders]);
+  const handleStop = useCallback(() => {
+    stoppedRef.current = true;
+    pausedRef.current = false;
+    setIsStopped(true);
+    setIsPaused(false);
+    setLoading(false);
+    setParserChecking(false);
+    setBatchProgress(null);
+    setParserProgress(null);
+  }, []);
+
+  // Wait while paused (polls every 200ms)
+  const waitIfPaused = useCallback((): Promise<boolean> => {
+    return new Promise((resolve) => {
+      const check = () => {
+        if (stoppedRef.current) { resolve(false); return; }
+        if (!pausedRef.current) { resolve(true); return; }
+        setTimeout(check, 200);
+      };
+      check();
+    });
+  }, []);
+
+  // Core chunk checker with pause/stop support
+  const checkInChunksInterruptible = useCallback(async (
+    usernames: string[],
+    startDone: number,
+    onProgress: (done: number, total: number, partial: CheckResult[]) => void,
+    existingResults: CheckResult[]
+  ): Promise<{ results: CheckResult[]; stopped: boolean; remaining: string[] }> => {
+    const allResults: CheckResult[] = [...existingResults];
+    const total = usernames.length + startDone;
+
+    for (let i = 0; i < usernames.length; i += API_CHUNK) {
+      // Wait if paused
+      const canContinue = await waitIfPaused();
+      if (!canContinue || stoppedRef.current) {
+        return { results: allResults, stopped: true, remaining: usernames.slice(i) };
+      }
+
+      const chunk = usernames.slice(i, i + API_CHUNK);
+      try {
+        const res = await fetch("/api/check-username", {
+          method: "POST", headers: authHeaders(), body: JSON.stringify({ usernames: chunk }),
+        });
+        const d = await res.json() as { results?: CheckResult[]; error?: string };
+        if (!res.ok) throw new Error(d.error ?? "Something went wrong");
+        allResults.push(...(d.results ?? []));
+        onProgress(startDone + allResults.length - existingResults.length, total, [...allResults]);
+      } catch (e) {
+        if (stoppedRef.current) return { results: allResults, stopped: true, remaining: usernames.slice(i) };
+        throw e;
+      }
+
+      // Check again after chunk completes
+      if (stoppedRef.current) {
+        return { results: allResults, stopped: true, remaining: usernames.slice(i + API_CHUNK) };
+      }
+    }
+    return { results: allResults, stopped: false, remaining: [] };
+  }, [authHeaders, waitIfPaused]);
 
   const checkInChunks = useCallback(async (
     usernames: string[],
@@ -484,18 +615,70 @@ export default function HomePage() {
     return allResults;
   }, [authHeaders]);
 
-  const checkBatch = useCallback(async () => {
-    const lines = batchInput.split(/[\n,;]+/).map(s => s.trim().replace(/^@/, "").toLowerCase()).filter(Boolean);
-    if (!lines.length) return;
-    if (lines.length > 1000) { setError("Max 1000 usernames."); return; }
-    setLoading(true); setError(null); setBatchRes([]); setBatchSort("none");
-    setBatchProgress({ done: 0, total: lines.length });
+  const checkSingle = useCallback(async () => {
+    const u = input.trim().replace(/^@/, "").toLowerCase();
+    if (!u) return;
+    setLoading(true); setError(null); setResult(null);
     try {
-      await checkInChunks(lines, (done, total, partial) => { setBatchProgress({ done, total }); setBatchRes(partial); });
-      void loadHistory();
+      const res = await fetch(`/api/check-username?username=${encodeURIComponent(u)}`, { headers: authHeaders() });
+      const d = await res.json() as CheckResult & { error?: string };
+      if (!res.ok) setError(d.error ?? "Something went wrong");
+      else { setResult(d as CheckResult); void loadHistory(); }
+    } catch { setError("Network error."); }
+    finally { setLoading(false); }
+  }, [input, loadHistory, authHeaders]);
+
+  const checkBatch = useCallback(async (resumeQueue?: string[], resumePartial?: CheckResult[]) => {
+    const isResume = !!resumeQueue;
+    const lines = isResume
+      ? resumeQueue!
+      : batchInput.split(/[\n,;]+/).map(s => s.trim().replace(/^@/, "").toLowerCase()).filter(Boolean);
+
+    if (!lines.length) return;
+    if (!isResume && lines.length > 1000) { setError("Max 1000 usernames."); return; }
+
+    stoppedRef.current = false;
+    pausedRef.current = false;
+    setIsStopped(false);
+    setIsPaused(false);
+    setLoading(true);
+    setError(null);
+    if (!isResume) { setBatchRes([]); setBatchSort("none"); }
+    activeCheckMode.current = "batch";
+
+    const alreadyDone = isResume ? (resumePartial?.length ?? 0) : 0;
+    const total = lines.length + alreadyDone;
+    setBatchProgress({ done: alreadyDone, total });
+
+    try {
+      const { results, stopped, remaining } = await checkInChunksInterruptible(
+        lines,
+        alreadyDone,
+        (done, tot, partial) => { setBatchProgress({ done, total: tot }); setBatchRes(partial); },
+        resumePartial ?? []
+      );
+      setBatchRes(results);
+      if (stopped) {
+        pendingQueueRef.current = remaining;
+        partialResultsRef.current = results;
+      } else {
+        pendingQueueRef.current = [];
+        partialResultsRef.current = [];
+        void loadHistory();
+      }
     } catch (e) { setError(e instanceof Error ? e.message : "Network error."); }
-    finally { setLoading(false); setBatchProgress(null); }
-  }, [batchInput, loadHistory, checkInChunks]);
+    finally {
+      setLoading(false);
+      if (!stoppedRef.current) setBatchProgress(null);
+    }
+  }, [batchInput, loadHistory, checkInChunksInterruptible]);
+
+  const resumeBatch = useCallback(() => {
+    if (!pendingQueueRef.current.length) return;
+    stoppedRef.current = false;
+    setIsStopped(false);
+    void checkBatch(pendingQueueRef.current, partialResultsRef.current);
+  }, [checkBatch]);
 
   const checkSweep = useCallback(async () => {
     const base = sweepInput.trim().replace(/^@/, "").toLowerCase();
@@ -545,23 +728,62 @@ export default function HomePage() {
     picked.forEach(idx => shownIndices.current.add(idx));
     setParserList(picked.map(idx => all[idx]));
     setParserChecked([]); setParserSort("none"); setParserProgress(null); setWordListError(null);
+    // Reset stop state for new batch
+    stoppedRef.current = false; setIsStopped(false);
+    pendingQueueRef.current = []; partialResultsRef.current = [];
   }, []);
 
-  const handleCheckParsed = useCallback(async () => {
-    if (!parserList.length) return;
-    setParserChecking(true); setParserChecked([]); setParserSort("none"); setParserProgress(null);
-    try {
-      const usernames = parserSweepMode !== "off"
+  const handleCheckParsed = useCallback(async (resumeQueue?: string[], resumePartial?: CheckResult[]) => {
+    const isResume = !!resumeQueue;
+    if (!isResume && !parserList.length) return;
+
+    stoppedRef.current = false;
+    pausedRef.current = false;
+    setIsStopped(false);
+    setIsPaused(false);
+    setParserChecking(true);
+    if (!isResume) { setParserChecked([]); setParserSort("none"); setParserProgress(null); }
+    activeCheckMode.current = "parser";
+
+    const baseUsernames = isResume
+      ? resumeQueue!
+      : parserSweepMode !== "off"
         ? parserList.flatMap(w => buildSweepCandidates(w, parserSweepMode as SweepMode))
         : parserList;
-      setParserProgress({ done: 0, total: usernames.length });
-      const allResults = await checkInChunks(usernames, (done, total, partial) => {
-        setParserProgress({ done, total }); setParserChecked(partial);
-      });
-      setParserChecked(allResults); void loadHistory();
+
+    const alreadyDone = isResume ? (resumePartial?.length ?? 0) : 0;
+    const total = baseUsernames.length + alreadyDone;
+    setParserProgress({ done: alreadyDone, total });
+
+    try {
+      const { results, stopped, remaining } = await checkInChunksInterruptible(
+        baseUsernames,
+        alreadyDone,
+        (done, tot, partial) => { setParserProgress({ done, total: tot }); setParserChecked(partial); },
+        resumePartial ?? []
+      );
+      setParserChecked(results);
+      if (stopped) {
+        pendingQueueRef.current = remaining;
+        partialResultsRef.current = results;
+      } else {
+        pendingQueueRef.current = [];
+        partialResultsRef.current = [];
+        void loadHistory();
+      }
     } catch (e) { console.error("Parser check error:", e); }
-    finally { setParserChecking(false); setParserProgress(null); }
-  }, [parserList, parserSweepMode, loadHistory, checkInChunks]);
+    finally {
+      setParserChecking(false);
+      if (!stoppedRef.current) setParserProgress(null);
+    }
+  }, [parserList, parserSweepMode, loadHistory, checkInChunksInterruptible]);
+
+  const resumeParser = useCallback(() => {
+    if (!pendingQueueRef.current.length) return;
+    stoppedRef.current = false;
+    setIsStopped(false);
+    void handleCheckParsed(pendingQueueRef.current, partialResultsRef.current);
+  }, [handleCheckParsed]);
 
   const handleCopyParsed = useCallback(() => {
     navigator.clipboard.writeText(parserList.join("\n")).then(() => {
@@ -588,6 +810,58 @@ export default function HomePage() {
     : parserSweepMode === "digit-suffix" ? parserList.length * 11 : parserList.length * 27;
   const remainingWords = allWordsRef.current.length > 0 ? allWordsRef.current.length - shownIndices.current.size : 0;
   const batchLineCount = batchInput.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).length;
+
+  // Determine if any check is actively running or paused/stopped
+  const isCheckRunning  = loading || parserChecking;
+  const hasPendingQueue = pendingQueueRef.current.length > 0;
+
+  // Control bar rendered during/after batch-style checks
+  const renderControlBar = (progressData: { done: number; total: number } | null, onResume: () => void) => {
+    if (!progressData && !isStopped && !isPaused) return null;
+    return (
+      <div style={{ marginBottom: "10px" }}>
+        {progressData && (
+          <ProgressBar done={progressData.done} total={progressData.total} paused={isPaused} />
+        )}
+        {(isCheckRunning || isStopped || isPaused) && (
+          <div style={{ display: "flex", gap: "5px", marginTop: "6px" }}>
+            {/* Stop button — shown while running */}
+            {isCheckRunning && !isStopped && (
+              <button onClick={handleStop} style={{
+                ...ghostBtn(true),
+                borderColor: "rgba(240,64,64,0.35)",
+                color: "#f04040",
+              }}>
+                <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor">
+                  <rect x="1" y="1" width="8" height="8" rx="1"/>
+                </svg>
+                Stop
+              </button>
+            )}
+            {/* Resume button — shown when stopped with pending work */}
+            {isStopped && hasPendingQueue && (
+              <button onClick={onResume} style={{
+                ...ghostBtn(),
+                background: "rgba(0,152,234,0.08)",
+                borderColor: "rgba(0,152,234,0.3)",
+                color: C.ton,
+              }}>
+                <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor">
+                  <polygon points="2,1 9,5 2,9"/>
+                </svg>
+                Resume ({pendingQueueRef.current.length} left)
+              </button>
+            )}
+            {isStopped && !hasPendingQueue && (
+              <span style={{ fontSize: "11px", color: C.t2, display: "flex", alignItems: "center", ...CSS.font }}>
+                ✕ Stopped
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -713,7 +987,7 @@ export default function HomePage() {
                   style={{ width: "100%", background: C.bg1, border: "none", outline: "none", color: C.t0, fontSize: "13px", fontWeight: 600, padding: "10px 12px", resize: "vertical", lineHeight: 1.7, ...CSS.font }}
                 />
               </div>
-              {batchProgress && <ProgressBar done={batchProgress.done} total={batchProgress.total} label="Checking batch…" />}
+              {renderControlBar(batchProgress, resumeBatch)}
               <div style={{ marginBottom: "18px" }}>
                 <InputRow>
                   <PrimaryBtn onClick={() => void checkBatch()} disabled={loading || !batchInput.trim()} loading={loading}>
@@ -853,7 +1127,7 @@ export default function HomePage() {
                     </button>
                     <span style={{ fontSize: "11px", color: C.t2, display: "flex", alignItems: "center", marginLeft: "4px", ...CSS.font }}>{parserList.length} words</span>
                   </div>
-                  {parserProgress && <ProgressBar done={parserProgress.done} total={parserProgress.total} label={`Checking${parserSweepMode !== "off" ? " (sweep)" : ""}…`} />}
+                  {renderControlBar(parserProgress, resumeParser)}
                   {parserChecked.length > 0 ? (
                     <Results results={parserChecked} sort={parserSort} setSort={setParserSort} />
                   ) : (

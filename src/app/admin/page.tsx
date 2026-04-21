@@ -22,18 +22,11 @@ type ApiKey = {
   last_used_at: string | null;
 };
 
-// Format date using the browser's local timezone
-function fmt(s: string | null) {
-  if (!s) return "—";
-  try {
-    const d = new Date(s);
-    if (isNaN(d.getTime())) return s;
-    return d.toLocaleString(undefined, {
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return s; }
-}
+type OnlineEntry = {
+  id: string;
+  label: string;
+  lastSeenMs: number;
+};
 
 function Spinner({ size = 13 }: { size?: number }) {
   return (
@@ -64,6 +57,25 @@ function Badge({ active }: { active: boolean }) {
     }}>
       <span style={{ width: 4, height: 4, borderRadius: "50%", background: active ? C.green : C.red }} />
       {active ? "Active" : "Inactive"}
+    </span>
+  );
+}
+
+function OnlineBadge({ online }: { online: boolean }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: "4px",
+      padding: "2px 7px", borderRadius: "2px", fontSize: "10px", fontWeight: 700,
+      background: online ? "rgba(53,201,107,0.08)" : "transparent",
+      border: `0.5px solid ${online ? "rgba(53,201,107,0.25)" : "transparent"}`,
+      color: online ? C.green : C.t3, ...F,
+    }}>
+      <span style={{
+        width: 5, height: 5, borderRadius: "50%",
+        background: online ? C.green : "rgba(240,240,242,0.12)",
+        animation: online ? "pulse-dot 2s ease-in-out infinite" : "none",
+      }} />
+      {online ? "Online" : "—"}
     </span>
   );
 }
@@ -120,14 +132,24 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
 
   const [label, setLabel] = useState("");
   const [rawKey, setRawKey] = useState("");
   const [role, setRole] = useState("user");
-  const [expiresAt, setExpiresAt] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createOk, setCreateOk] = useState(false);
+
+  // Fetch online presence
+  const loadPresence = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/presence");
+      if (!res.ok) return;
+      const data = (await res.json()) as { online?: OnlineEntry[] };
+      setOnlineIds(new Set((data.online ?? []).map((e) => e.id)));
+    } catch { /* ignore */ }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -142,7 +164,16 @@ export default function AdminPage() {
     finally { setLoading(false); }
   }, [router]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    void loadPresence();
+  }, [load, loadPresence]);
+
+  // Poll presence every 20 seconds
+  useEffect(() => {
+    const interval = setInterval(() => void loadPresence(), 20_000);
+    return () => clearInterval(interval);
+  }, [loadPresence]);
 
   const toggle = async (id: string, is_active: boolean) => {
     await fetch("/api/admin/keys", {
@@ -171,17 +202,19 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/admin/keys", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: label.trim(), rawKey: rawKey.trim(), role, expiresAt: expiresAt || undefined }),
+        body: JSON.stringify({ label: label.trim(), rawKey: rawKey.trim(), role }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!data.ok) { setCreateError(data.error ?? "Failed"); return; }
       setCreateOk(true);
-      setLabel(""); setRawKey(""); setRole("user"); setExpiresAt("");
+      setLabel(""); setRawKey(""); setRole("user");
       void load();
       setTimeout(() => setCreateOk(false), 2000);
     } catch { setCreateError("Network error"); }
     finally { setCreating(false); }
   };
+
+  const onlineCount = keys.filter(k => onlineIds.has(k.id)).length;
 
   const sectionTitle = (t: string) => (
     <div style={{ fontSize: "9px", fontWeight: 700, color: C.t2, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "10px", ...F }}>{t}</div>
@@ -192,6 +225,7 @@ export default function AdminPage() {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
         * { box-sizing: border-box; }
         ::selection { background: rgba(0,152,234,0.15); color: #f0f0f2; }
         ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.13); }
@@ -208,7 +242,14 @@ export default function AdminPage() {
               <h1 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.01em", color: C.t0, ...F }}>
                 Admin Panel
               </h1>
-              <p style={{ fontSize: "11px", color: C.t2, margin: 0, ...F }}>API key management</p>
+              <p style={{ fontSize: "11px", color: C.t2, margin: 0, ...F }}>
+                API key management
+                {onlineCount > 0 && (
+                  <span style={{ marginLeft: "10px", color: C.green, fontWeight: 700 }}>
+                    · {onlineCount} online now
+                  </span>
+                )}
+              </p>
             </div>
             <a href="/" style={{
               padding: "6px 12px", background: "transparent",
@@ -243,7 +284,7 @@ export default function AdminPage() {
                   <Select value={role} onChange={setRole} options={[{ k: "user", label: "user" }, { k: "admin", label: "admin" }]} />
                 </div>
               </div>
-              <div style={{ marginBottom: "10px" }}>
+              <div style={{ marginBottom: "14px" }}>
                 <div style={{ fontSize: "10px", color: C.t2, marginBottom: "5px", letterSpacing: "0.06em", textTransform: "uppercase", ...F }}>API Key (raw value)</div>
                 <div style={{ display: "flex", gap: "6px" }}>
                   <div style={{ flex: 1 }}><Input value={rawKey} onChange={setRawKey} placeholder="min 8 characters" /></div>
@@ -260,10 +301,6 @@ export default function AdminPage() {
                     ⚠ Save this key — it won&apos;t be shown again after creation
                   </div>
                 )}
-              </div>
-              <div style={{ marginBottom: "14px" }}>
-                <div style={{ fontSize: "10px", color: C.t2, marginBottom: "5px", letterSpacing: "0.06em", textTransform: "uppercase", ...F }}>Expires at (optional)</div>
-                <Input value={expiresAt} onChange={setExpiresAt} type="datetime-local" />
               </div>
               {createError && (
                 <div style={{ padding: "7px 10px", background: "rgba(240,64,64,0.07)", border: "0.5px solid rgba(240,64,64,0.28)", borderRadius: "2px", color: C.red, fontSize: "11px", marginBottom: "10px", ...F }}>
@@ -295,7 +332,7 @@ export default function AdminPage() {
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
               {sectionTitle(`All keys (${keys.length})`)}
-              <button onClick={() => void load()} style={{
+              <button onClick={() => { void load(); void loadPresence(); }} style={{
                 background: "transparent", border: `0.5px solid ${C.line}`, borderRadius: "2px",
                 padding: "3px 10px", color: C.t2, fontSize: "11px", cursor: "pointer",
                 display: "flex", alignItems: "center", gap: "5px", marginBottom: "10px", ...F,
@@ -321,58 +358,59 @@ export default function AdminPage() {
               </div>
             ) : (
               <div style={{ border: `0.5px solid ${C.line}`, borderRadius: "4px", overflow: "hidden", background: C.bg1, animation: "fadeUp 0.15s ease forwards" }}>
+                {/* Table header */}
                 <div style={{
-                  display: "grid", gridTemplateColumns: "1fr 70px 80px 130px 130px 120px",
+                  display: "grid", gridTemplateColumns: "1fr 70px 80px 80px 130px",
                   padding: "7px 14px", background: C.bg2, borderBottom: `0.5px solid ${C.line}`,
                   fontSize: "9px", color: C.t3, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", ...F,
                 }}>
-                  <span>Label</span><span>Role</span><span>Status</span>
-                  <span>Created</span><span>Last used</span>
+                  <span>Label</span>
+                  <span>Role</span>
+                  <span>Status</span>
+                  <span>Online</span>
                   <span style={{ textAlign: "right" }}>Actions</span>
                 </div>
-                {keys.map((k, i) => (
-                  <div key={k.id} style={{
-                    display: "grid", gridTemplateColumns: "1fr 70px 80px 130px 130px 120px",
-                    alignItems: "center", padding: "10px 14px", gap: "8px",
-                    borderBottom: i < keys.length - 1 ? `0.5px solid ${C.line}` : "none",
-                    transition: "background 100ms ease",
-                  }}
-                    onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.background = C.bg3)}
-                    onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
-                  >
-                    <div>
-                      <div style={{ fontSize: "13px", fontWeight: 700, color: C.t0, ...F }}>{k.label}</div>
-                      {k.expires_at && (
-                        <div style={{ fontSize: "10px", color: C.yellow, marginTop: "2px", ...F }}>
-                          expires {fmt(k.expires_at)}
-                        </div>
-                      )}
+
+                {keys.map((k, i) => {
+                  const isOnline = onlineIds.has(k.id);
+                  return (
+                    <div key={k.id} style={{
+                      display: "grid", gridTemplateColumns: "1fr 70px 80px 80px 130px",
+                      alignItems: "center", padding: "10px 14px", gap: "8px",
+                      borderBottom: i < keys.length - 1 ? `0.5px solid ${C.line}` : "none",
+                      transition: "background 100ms ease",
+                    }}
+                      onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.background = C.bg3)}
+                      onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
+                    >
+                      <div>
+                        <div style={{ fontSize: "13px", fontWeight: 700, color: C.t0, ...F }}>{k.label}</div>
+                      </div>
+                      <RoleBadge role={k.role} />
+                      <Badge active={k.is_active} />
+                      <OnlineBadge online={isOnline} />
+                      <div style={{ display: "flex", gap: "4px", justifyContent: "flex-end" }}>
+                        <button onClick={() => void toggle(k.id, !k.is_active)} style={{
+                          padding: "3px 8px", background: "transparent",
+                          border: `0.5px solid ${C.line}`, borderRadius: "2px",
+                          color: k.is_active ? C.yellow : C.green,
+                          fontSize: "10px", fontWeight: 600, cursor: "pointer", transition: "all 100ms ease", ...F,
+                        }}>
+                          {k.is_active ? "Disable" : "Enable"}
+                        </button>
+                        <button onClick={() => void del(k.id)} style={{
+                          padding: "3px 8px",
+                          background: deleteConfirm === k.id ? "rgba(240,64,64,0.08)" : "transparent",
+                          border: `0.5px solid ${deleteConfirm === k.id ? "rgba(240,64,64,0.35)" : C.line}`,
+                          borderRadius: "2px", color: deleteConfirm === k.id ? C.red : C.t2,
+                          fontSize: "10px", fontWeight: 600, cursor: "pointer", transition: "all 100ms ease", ...F,
+                        }}>
+                          {deleteConfirm === k.id ? "Sure?" : "Delete"}
+                        </button>
+                      </div>
                     </div>
-                    <RoleBadge role={k.role} />
-                    <Badge active={k.is_active} />
-                    <span style={{ fontSize: "11px", color: C.t2, ...F }}>{fmt(k.created_at)}</span>
-                    <span style={{ fontSize: "11px", color: C.t2, ...F }}>{fmt(k.last_used_at)}</span>
-                    <div style={{ display: "flex", gap: "4px", justifyContent: "flex-end" }}>
-                      <button onClick={() => void toggle(k.id, !k.is_active)} style={{
-                        padding: "3px 8px", background: "transparent",
-                        border: `0.5px solid ${C.line}`, borderRadius: "2px",
-                        color: k.is_active ? C.yellow : C.green,
-                        fontSize: "10px", fontWeight: 600, cursor: "pointer", transition: "all 100ms ease", ...F,
-                      }}>
-                        {k.is_active ? "Disable" : "Enable"}
-                      </button>
-                      <button onClick={() => void del(k.id)} style={{
-                        padding: "3px 8px",
-                        background: deleteConfirm === k.id ? "rgba(240,64,64,0.08)" : "transparent",
-                        border: `0.5px solid ${deleteConfirm === k.id ? "rgba(240,64,64,0.35)" : C.line}`,
-                        borderRadius: "2px", color: deleteConfirm === k.id ? C.red : C.t2,
-                        fontSize: "10px", fontWeight: 600, cursor: "pointer", transition: "all 100ms ease", ...F,
-                      }}>
-                        {deleteConfirm === k.id ? "Sure?" : "Delete"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

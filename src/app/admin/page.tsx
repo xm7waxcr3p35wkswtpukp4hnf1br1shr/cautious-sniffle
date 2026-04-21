@@ -22,15 +22,21 @@ type ApiKey = {
   last_used_at: string | null;
 };
 
+// Correctly format dates in MSK (UTC+3)
 function fmt(s: string | null) {
   if (!s) return "—";
   try {
     const d = new Date(s);
-    return isNaN(d.getTime()) ? s : d.toLocaleString("en-GB", {
+    if (isNaN(d.getTime())) return s;
+    // toLocaleString with Europe/Moscow gives correct MSK time
+    return d.toLocaleString("ru-RU", {
       timeZone: "Europe/Moscow",
-      day: "2-digit", month: "short", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).replace(",", "");
   } catch { return s; }
 }
 
@@ -216,7 +222,7 @@ export default function AdminPage() {
               <h1 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.01em", color: C.t0, ...F }}>
                 Admin Panel
               </h1>
-              <p style={{ fontSize: "11px", color: C.t2, margin: 0, ...F }}>API key management · times shown in MSK</p>
+              <p style={{ fontSize: "11px", color: C.t2, margin: 0, ...F }}>API key management · times shown in MSK (UTC+3)</p>
             </div>
             <div style={{ display: "flex", gap: "6px" }}>
               <a href="/" style={{

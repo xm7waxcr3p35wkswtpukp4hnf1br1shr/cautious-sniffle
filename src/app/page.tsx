@@ -48,7 +48,6 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string; bor
 const getS = (s: string) =>
   STATUS_CFG[s] ?? { label: s, color: "#7a7a88", bg: "rgba(120,120,136,0.10)", border: "rgba(120,120,136,0.22)", dot: "#7a7a88" };
 
-// Statuses considered "available / free" for download
 const FREE_STATUSES = new Set(["Available"]);
 
 const STATUS_ORDER = ["Available", "For Sale", "Reserved", "Sold", "Taken", "Unknown", "Invalid"];
@@ -73,7 +72,6 @@ function buildSweepCandidates(base: string, mode: SweepMode): string[] {
   return [base, ...chars.map(c => mode === "alpha-prefix" ? `${c}${base}` : `${base}${c}`)];
 }
 
-// Format date using browser's local timezone
 function fmtDate(s: string) {
   try {
     const d = new Date(s);
@@ -82,7 +80,6 @@ function fmtDate(s: string) {
   } catch { return s; }
 }
 
-// Download available usernames as .txt
 function downloadAvailable(results: CheckResult[], filename = "available_usernames.txt") {
   const available = results.filter(r => FREE_STATUSES.has(r.status)).map(r => r.username);
   if (!available.length) return false;
@@ -445,12 +442,10 @@ export default function HomePage() {
   const [clearOk, setClearOk]       = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Pause/stop state
   const [isPaused, setIsPaused]   = useState(false);
   const [isStopped, setIsStopped] = useState(false);
   const pausedRef   = useRef(false);
   const stoppedRef  = useRef(false);
-  // Queue state for resume capability
   const pendingQueueRef   = useRef<string[]>([]);
   const partialResultsRef = useRef<CheckResult[]>([]);
   const activeCheckMode   = useRef<"batch" | "parser" | null>(null);
@@ -478,20 +473,13 @@ export default function HomePage() {
     setUserIdDisplay(uid);
   }, []);
 
-  // ── Pause on tab hide / resume on tab show ──────────────────────────────
+  // Pause on tab hide / resume on tab show
   useEffect(() => {
     const handleVisibility = () => {
       if (document.hidden) {
-        if (loading) {
-          pausedRef.current = true;
-          setIsPaused(true);
-        }
+        if (loading) { pausedRef.current = true; setIsPaused(true); }
       } else {
-        if (pausedRef.current) {
-          pausedRef.current = false;
-          setIsPaused(false);
-          // Resume will be handled by the polling loop below
-        }
+        if (pausedRef.current) { pausedRef.current = false; setIsPaused(false); }
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
@@ -515,6 +503,14 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => { if (userIdDisplay) void loadHistory(); }, [userIdDisplay, loadHistory]);
+
+  // ── Heartbeat: сообщает админ-панели что пользователь онлайн ──
+  useEffect(() => {
+    const ping = () => { void fetch("/api/admin/presence", { method: "POST" }); };
+    ping(); // сразу при входе
+    const interval = setInterval(ping, 30_000); // каждые 30 сек
+    return () => clearInterval(interval);
+  }, []);
 
   const clearHistory = useCallback(async () => {
     if (!clearOk) { setClearOk(true); setTimeout(() => setClearOk(false), 3000); return; }
@@ -546,7 +542,6 @@ export default function HomePage() {
     setParserProgress(null);
   }, []);
 
-  // Wait while paused (polls every 200ms)
   const waitIfPaused = useCallback((): Promise<boolean> => {
     return new Promise((resolve) => {
       const check = () => {
@@ -558,7 +553,6 @@ export default function HomePage() {
     });
   }, []);
 
-  // Core chunk checker with pause/stop support
   const checkInChunksInterruptible = useCallback(async (
     usernames: string[],
     startDone: number,
@@ -569,12 +563,10 @@ export default function HomePage() {
     const total = usernames.length + startDone;
 
     for (let i = 0; i < usernames.length; i += API_CHUNK) {
-      // Wait if paused
       const canContinue = await waitIfPaused();
       if (!canContinue || stoppedRef.current) {
         return { results: allResults, stopped: true, remaining: usernames.slice(i) };
       }
-
       const chunk = usernames.slice(i, i + API_CHUNK);
       try {
         const res = await fetch("/api/check-username", {
@@ -588,8 +580,6 @@ export default function HomePage() {
         if (stoppedRef.current) return { results: allResults, stopped: true, remaining: usernames.slice(i) };
         throw e;
       }
-
-      // Check again after chunk completes
       if (stoppedRef.current) {
         return { results: allResults, stopped: true, remaining: usernames.slice(i + API_CHUNK) };
       }
@@ -637,12 +627,9 @@ export default function HomePage() {
     if (!lines.length) return;
     if (!isResume && lines.length > 1000) { setError("Max 1000 usernames."); return; }
 
-    stoppedRef.current = false;
-    pausedRef.current = false;
-    setIsStopped(false);
-    setIsPaused(false);
-    setLoading(true);
-    setError(null);
+    stoppedRef.current = false; pausedRef.current = false;
+    setIsStopped(false); setIsPaused(false);
+    setLoading(true); setError(null);
     if (!isResume) { setBatchRes([]); setBatchSort("none"); }
     activeCheckMode.current = "batch";
 
@@ -652,8 +639,7 @@ export default function HomePage() {
 
     try {
       const { results, stopped, remaining } = await checkInChunksInterruptible(
-        lines,
-        alreadyDone,
+        lines, alreadyDone,
         (done, tot, partial) => { setBatchProgress({ done, total: tot }); setBatchRes(partial); },
         resumePartial ?? []
       );
@@ -662,8 +648,7 @@ export default function HomePage() {
         pendingQueueRef.current = remaining;
         partialResultsRef.current = results;
       } else {
-        pendingQueueRef.current = [];
-        partialResultsRef.current = [];
+        pendingQueueRef.current = []; partialResultsRef.current = [];
         void loadHistory();
       }
     } catch (e) { setError(e instanceof Error ? e.message : "Network error."); }
@@ -675,8 +660,7 @@ export default function HomePage() {
 
   const resumeBatch = useCallback(() => {
     if (!pendingQueueRef.current.length) return;
-    stoppedRef.current = false;
-    setIsStopped(false);
+    stoppedRef.current = false; setIsStopped(false);
     void checkBatch(pendingQueueRef.current, partialResultsRef.current);
   }, [checkBatch]);
 
@@ -728,7 +712,6 @@ export default function HomePage() {
     picked.forEach(idx => shownIndices.current.add(idx));
     setParserList(picked.map(idx => all[idx]));
     setParserChecked([]); setParserSort("none"); setParserProgress(null); setWordListError(null);
-    // Reset stop state for new batch
     stoppedRef.current = false; setIsStopped(false);
     pendingQueueRef.current = []; partialResultsRef.current = [];
   }, []);
@@ -737,10 +720,8 @@ export default function HomePage() {
     const isResume = !!resumeQueue;
     if (!isResume && !parserList.length) return;
 
-    stoppedRef.current = false;
-    pausedRef.current = false;
-    setIsStopped(false);
-    setIsPaused(false);
+    stoppedRef.current = false; pausedRef.current = false;
+    setIsStopped(false); setIsPaused(false);
     setParserChecking(true);
     if (!isResume) { setParserChecked([]); setParserSort("none"); setParserProgress(null); }
     activeCheckMode.current = "parser";
@@ -757,8 +738,7 @@ export default function HomePage() {
 
     try {
       const { results, stopped, remaining } = await checkInChunksInterruptible(
-        baseUsernames,
-        alreadyDone,
+        baseUsernames, alreadyDone,
         (done, tot, partial) => { setParserProgress({ done, total: tot }); setParserChecked(partial); },
         resumePartial ?? []
       );
@@ -767,8 +747,7 @@ export default function HomePage() {
         pendingQueueRef.current = remaining;
         partialResultsRef.current = results;
       } else {
-        pendingQueueRef.current = [];
-        partialResultsRef.current = [];
+        pendingQueueRef.current = []; partialResultsRef.current = [];
         void loadHistory();
       }
     } catch (e) { console.error("Parser check error:", e); }
@@ -780,8 +759,7 @@ export default function HomePage() {
 
   const resumeParser = useCallback(() => {
     if (!pendingQueueRef.current.length) return;
-    stoppedRef.current = false;
-    setIsStopped(false);
+    stoppedRef.current = false; setIsStopped(false);
     void handleCheckParsed(pendingQueueRef.current, partialResultsRef.current);
   }, [handleCheckParsed]);
 
@@ -811,11 +789,9 @@ export default function HomePage() {
   const remainingWords = allWordsRef.current.length > 0 ? allWordsRef.current.length - shownIndices.current.size : 0;
   const batchLineCount = batchInput.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).length;
 
-  // Determine if any check is actively running or paused/stopped
   const isCheckRunning  = loading || parserChecking;
   const hasPendingQueue = pendingQueueRef.current.length > 0;
 
-  // Control bar rendered during/after batch-style checks
   const renderControlBar = (progressData: { done: number; total: number } | null, onResume: () => void) => {
     if (!progressData && !isStopped && !isPaused) return null;
     return (
@@ -825,7 +801,6 @@ export default function HomePage() {
         )}
         {(isCheckRunning || isStopped || isPaused) && (
           <div style={{ display: "flex", gap: "5px", marginTop: "6px" }}>
-            {/* Stop button — shown while running */}
             {isCheckRunning && !isStopped && (
               <button onClick={handleStop} style={{
                 ...ghostBtn(true),
@@ -838,7 +813,6 @@ export default function HomePage() {
                 Stop
               </button>
             )}
-            {/* Resume button — shown when stopped with pending work */}
             {isStopped && hasPendingQueue && (
               <button onClick={onResume} style={{
                 ...ghostBtn(),
@@ -873,6 +847,28 @@ export default function HomePage() {
         @keyframes spin { to { transform: rotate(360deg); } }
         .animate-spin { animation: spin 0.7s linear infinite; }
         @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        @keyframes shimmer {
+          0%   { background-position: -500px 0; }
+          100% { background-position:  500px 0; }
+        }
+        .title-shimmer {
+          display: inline-block;
+          background: linear-gradient(
+            90deg,
+            #f0f0f2 0%,
+            #f0f0f2 20%,
+            #6b6b7a 38%,
+            #ffffff 50%,
+            #6b6b7a 62%,
+            #f0f0f2 80%,
+            #f0f0f2 100%
+          );
+          background-size: 500px 100%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: shimmer 4s ease-in-out infinite;
+        }
         * { box-sizing: border-box; } textarea { box-sizing: border-box; }
         ::selection { background: ${C.tonDim}; color: ${C.t0}; }
         ::-webkit-scrollbar { width:3px; height:3px; } ::-webkit-scrollbar-track { background: transparent; }
@@ -885,7 +881,7 @@ export default function HomePage() {
 
           {/* Header */}
           <div style={{ marginBottom: "24px", paddingBottom: "20px", borderBottom: `0.5px solid ${C.line}` }}>
-            <h1 style={{ fontSize: "18px", fontWeight: 700, margin: "0 0 5px", letterSpacing: "-0.01em", color: C.t0, ...CSS.font }}>Username Tool</h1>
+            <h1 className="title-shimmer" style={{ fontSize: "18px", fontWeight: 700, margin: "0 0 5px", letterSpacing: "-0.01em", ...CSS.font }}>Username Tool</h1>
             <p style={{ fontSize: "12px", color: C.t2, margin: 0, ...CSS.font }}>Search Fragment for available Telegram usernames. Real-time availability data.</p>
           </div>
 

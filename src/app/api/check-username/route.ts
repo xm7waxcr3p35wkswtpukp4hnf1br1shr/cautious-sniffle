@@ -67,24 +67,13 @@ async function runWithConcurrency<T, R>(
 
 /**
  * Parse Fragment HTML (from "h" field in JSON response) to determine status.
- *
- * Status classes present in HTML:
- *   tm-status-taken   → "Taken"    (registered on Telegram, not for sale)
- *   tm-status-avail   → "For Sale" (listed on Fragment auction)
- *   tm-status-unavail → "Sold"     (sold via Fragment)
- *
- * No tm-section-header-status at all → "Available" (free to register)
- * Very short / empty h → "RATE_LIMITED" (retry needed)
  */
 function parseFragmentHtml(html: string): string {
-  // Very short response = rate limited / empty
   if (html.length < 50) return "RATE_LIMITED";
 
   const match = /tm-section-header-status\s+(tm-status-\w+)/.exec(html);
 
   if (!match) {
-    // Page loaded but no status badge = username is free to register
-    // Additional heuristic: check for known page content markers
     if (
       html.includes("tm-") ||
       html.includes("fragment") ||
@@ -93,7 +82,6 @@ function parseFragmentHtml(html: string): string {
     ) {
       return "Available";
     }
-    // Still suspicious — might be partial response
     if (html.length < 200) return "RATE_LIMITED";
     return "Available";
   }
@@ -150,7 +138,6 @@ async function checkViaFragmentScrape(
     try {
       data = JSON.parse(rawText) as Record<string, unknown>;
     } catch {
-      // Non-JSON = rate-limit HTML page
       if (attempt < MAX_ATTEMPTS) {
         const delay = Math.pow(2, attempt + 1) * 700 + Math.random() * 600;
         console.log(`[fragment] @${username} non-JSON (${rawText.length}c), retry ${attempt + 1}`);
@@ -161,10 +148,7 @@ async function checkViaFragmentScrape(
     }
 
     if (!data || typeof data.h !== "string") {
-      // No "h" field but got a valid JSON response
-      // This can happen for available usernames where Fragment returns minimal data
       if (data && typeof data === "object" && !data.error) {
-        // If we got a clean response with no error and no status html, it's available
         if (data.found === false || data.h === "" || !("h" in data)) {
           return { status: "Available", source: "fragment.com" };
         }
@@ -178,7 +162,6 @@ async function checkViaFragmentScrape(
 
     const hVal = data.h as string;
 
-    // Empty h string = available (Fragment returns empty html for free usernames)
     if (hVal === "" || hVal.trim() === "") {
       return { status: "Available", source: "fragment.com" };
     }
@@ -230,6 +213,52 @@ async function checkViaFragmentAPI(username: string): Promise<{
   } catch { return null; }
 }
 
+/**
+ * Perform a single check attempt via API or scrape.
+ * Returns null for "status" if truly unknown after all retries.
+ */
+async function checkOnce(username: string): Promise<{
+  status: string;
+  name?: string | null;
+  photo?: string | null;
+  hasPremium?: boolean | null;
+  source: string;
+}> {
+  let result = await checkViaFragmentAPI(username);
+  if (!result) {
+    const scraped = await checkViaFragmentScrape(username);
+    result = { ...scraped, name: null, photo: null, hasPremium: null };
+  }
+  return result;
+}
+
+/**
+ * Check a username with automatic double-verification if first result is Unknown.
+ * If the first pass returns Unknown, we wait a moment and try again once more.
+ * This catches transient rate-limit / network issues without hammering Fragment.
+ */
+async function checkWithDoubleVerification(username: string): Promise<{
+  status: string;
+  name?: string | null;
+  photo?: string | null;
+  hasPremium?: boolean | null;
+  source: string;
+}> {
+  const first = await checkOnce(username);
+
+  // If we got a definitive answer, return it
+  if (first.status !== "Unknown") return first;
+
+  // First pass returned Unknown — wait and try once more
+  console.log(`[double-check] @${username} got Unknown on first pass, retrying…`);
+  await sleep(1500 + Math.random() * 1000);
+
+  const second = await checkOnce(username);
+
+  // If second pass is also Unknown, return Unknown; otherwise trust second pass
+  return second;
+}
+
 async function checkOne(
   rawUsername: string,
   userId?: string | null
@@ -245,11 +274,7 @@ async function checkOne(
   const cached = getCached(username);
   if (cached) return { username, ...cached };
 
-  let result = await checkViaFragmentAPI(username);
-  if (!result) {
-    const scraped = await checkViaFragmentScrape(username);
-    result = { ...scraped, name: null, photo: null, hasPremium: null };
-  }
+  const result = await checkWithDoubleVerification(username);
 
   setCache(username, {
     status: result.status, name: result.name ?? null,

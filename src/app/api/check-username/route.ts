@@ -6,10 +6,8 @@ const FRAGMENT_API_KEY = process.env.FRAGMENT_API_KEY;
 const FRAGMENT_API_BASE = "https://api.fragment-api.com";
 const FRAGMENT_BASE = "https://fragment.com/";
 
-// Conservative concurrency — Fragment rate-limits hard above 4-5 parallel scrape requests
 const CONCURRENCY = 4;
 
-// In-memory cache to avoid duplicate requests within the same process
 const resultCache = new Map<string, {
   status: string;
   name: string | null;
@@ -79,13 +77,24 @@ async function runWithConcurrency<T, R>(
  * Very short / empty h → "RATE_LIMITED" (retry needed)
  */
 function parseFragmentHtml(html: string): string {
-  // Use regex — more robust than chained string splits
+  // Very short response = rate limited / empty
+  if (html.length < 50) return "RATE_LIMITED";
+
   const match = /tm-section-header-status\s+(tm-status-\w+)/.exec(html);
 
   if (!match) {
-    // Suspiciously short — Fragment returned empty/truncated response
-    if (html.length < 100) return "RATE_LIMITED";
-    // Normal page with no status badge = username is free
+    // Page loaded but no status badge = username is free to register
+    // Additional heuristic: check for known page content markers
+    if (
+      html.includes("tm-") ||
+      html.includes("fragment") ||
+      html.includes("username") ||
+      html.length > 200
+    ) {
+      return "Available";
+    }
+    // Still suspicious — might be partial response
+    if (html.length < 200) return "RATE_LIMITED";
     return "Available";
   }
 
@@ -152,6 +161,14 @@ async function checkViaFragmentScrape(
     }
 
     if (!data || typeof data.h !== "string") {
+      // No "h" field but got a valid JSON response
+      // This can happen for available usernames where Fragment returns minimal data
+      if (data && typeof data === "object" && !data.error) {
+        // If we got a clean response with no error and no status html, it's available
+        if (data.found === false || data.h === "" || !("h" in data)) {
+          return { status: "Available", source: "fragment.com" };
+        }
+      }
       if (attempt < 3) {
         await sleep(800 + Math.random() * 400);
         return checkViaFragmentScrape(username, attempt + 1);
@@ -159,7 +176,14 @@ async function checkViaFragmentScrape(
       return { status: "Unknown", source: "fragment.com" };
     }
 
-    const status = parseFragmentHtml(data.h);
+    const hVal = data.h as string;
+
+    // Empty h string = available (Fragment returns empty html for free usernames)
+    if (hVal === "" || hVal.trim() === "") {
+      return { status: "Available", source: "fragment.com" };
+    }
+
+    const status = parseFragmentHtml(hVal);
 
     if (status === "RATE_LIMITED") {
       if (attempt < MAX_ATTEMPTS) {
@@ -269,7 +293,6 @@ export async function POST(req: NextRequest) {
   if (usernames.length > 2700)
     return NextResponse.json({ error: "Max 2700 usernames per batch" }, { status: 400 });
 
-  // Deduplicate inputs — identical usernames get one request, result is shared
   const seen = new Map<string, number>();
   const unique: string[] = [];
   const dupeMap: number[] = new Array(usernames.length);

@@ -175,6 +175,14 @@ export default function AdminPage() {
     return () => clearInterval(interval);
   }, [loadPresence]);
 
+  // Heartbeat — отправляем присутствие пока админ на этой странице
+  useEffect(() => {
+    const ping = () => { void fetch("/api/admin/presence", { method: "POST" }); };
+    ping();
+    const id = setInterval(ping, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const toggle = async (id: string, is_active: boolean) => {
     await fetch("/api/admin/keys", {
       method: "PATCH", headers: { "Content-Type": "application/json" },

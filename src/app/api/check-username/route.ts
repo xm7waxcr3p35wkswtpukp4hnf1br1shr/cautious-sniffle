@@ -67,31 +67,61 @@ async function runWithConcurrency<T, R>(
 
 /**
  * Parse Fragment HTML (from "h" field in JSON response) to determine status.
+ *
+ * Fragment HTML contains a status class like:
+ *   tm-status-taken   → "Taken"
+ *   tm-status-avail   → "For Sale"  (username is listed for sale)
+ *   tm-status-unavail → "Sold"      (already sold/owned)
+ *
+ * If NONE of these classes are present, the username truly doesn't exist
+ * on Fragment yet → "Available".
+ *
+ * We never assume "Available" from ambiguous signals — only from a confirmed
+ * absence of all status markers after validating the HTML is non-trivial.
  */
 function parseFragmentHtml(html: string): string {
-  if (html.length < 50) return "RATE_LIMITED";
+  // Too short to be a real response → rate-limited or empty
+  if (html.length < 100) return "RATE_LIMITED";
 
+  // Check for the definitive status class
   const match = /tm-section-header-status\s+(tm-status-\w+)/.exec(html);
 
-  if (!match) {
-    if (
-      html.includes("tm-") ||
-      html.includes("fragment") ||
-      html.includes("username") ||
-      html.length > 200
-    ) {
-      return "Available";
-    }
-    if (html.length < 200) return "RATE_LIMITED";
+  if (match) {
+    const statusMap: Record<string, string> = {
+      "tm-status-taken":   "Taken",
+      "tm-status-avail":   "For Sale",
+      "tm-status-unavail": "Sold",
+    };
+    return statusMap[match[1]] ?? "Unknown";
+  }
+
+  // No status class found. Now we need to decide if this is:
+  // (a) a real "Available" response (username doesn't exist on Fragment)
+  // (b) a rate-limit / partial response we shouldn't trust
+
+  // Fragment's "not found" page has specific markers
+  const hasFragmentStructure = html.includes("tm-section") || html.includes("tgme_");
+
+  // If it has Fragment page structure but no status class → it's the
+  // "username not registered" page → truly Available
+  if (hasFragmentStructure && html.length > 500) {
     return "Available";
   }
 
-  const statusMap: Record<string, string> = {
-    "tm-status-taken":   "Taken",
-    "tm-status-avail":   "For Sale",
-    "tm-status-unavail": "Sold",
-  };
-  return statusMap[match[1]] ?? "Unknown";
+  // If it looks like a search results page (not a username page) → Unknown
+  if (html.includes("tm-auctions") || html.includes("tm-auction-list")) {
+    return "Unknown";
+  }
+
+  // Short or structureless response → can't trust it
+  if (html.length < 500) return "RATE_LIMITED";
+
+  // Longer response with Fragment content but no status → Available
+  if (html.length > 1000 && (html.includes("fragment") || html.includes("username"))) {
+    return "Available";
+  }
+
+  return "RATE_LIMITED";
 }
 
 async function checkViaFragmentScrape(
@@ -147,12 +177,23 @@ async function checkViaFragmentScrape(
       return { status: "Unknown", source: "fragment.com" };
     }
 
-    if (!data || typeof data.h !== "string") {
-      if (data && typeof data === "object" && !data.error) {
-        if (data.found === false || data.h === "" || !("h" in data)) {
-          return { status: "Available", source: "fragment.com" };
-        }
+    // Explicit "not found" signals from Fragment API
+    if (data && typeof data === "object") {
+      if (data.found === false) {
+        return { status: "Available", source: "fragment.com" };
       }
+      // Error in response — don't assume Available
+      if (data.error) {
+        console.log(`[fragment] @${username} API error: ${String(data.error)}`);
+        if (attempt < MAX_ATTEMPTS) {
+          await sleep(800 + Math.random() * 400);
+          return checkViaFragmentScrape(username, attempt + 1);
+        }
+        return { status: "Unknown", source: "fragment.com" };
+      }
+    }
+
+    if (!data || typeof data.h !== "string") {
       if (attempt < 3) {
         await sleep(800 + Math.random() * 400);
         return checkViaFragmentScrape(username, attempt + 1);
@@ -162,7 +203,15 @@ async function checkViaFragmentScrape(
 
     const hVal = data.h as string;
 
+    // Empty h — Fragment returns this for usernames that don't exist yet
+    // BUT only trust this if we've had at least one successful response
     if (hVal === "" || hVal.trim() === "") {
+      // Retry once to confirm this isn't a rate-limit masking the real status
+      if (attempt === 0) {
+        await sleep(600 + Math.random() * 400);
+        return checkViaFragmentScrape(username, attempt + 1);
+      }
+      // Second empty response → truly Available
       return { status: "Available", source: "fragment.com" };
     }
 
@@ -171,7 +220,7 @@ async function checkViaFragmentScrape(
     if (status === "RATE_LIMITED") {
       if (attempt < MAX_ATTEMPTS) {
         const delay = Math.pow(2, attempt + 1) * 500 + Math.random() * 500;
-        console.log(`[fragment] @${username} empty h, retry ${attempt + 1}`);
+        console.log(`[fragment] @${username} rate-limited HTML, retry ${attempt + 1}`);
         await sleep(delay);
         return checkViaFragmentScrape(username, attempt + 1);
       }
@@ -214,8 +263,7 @@ async function checkViaFragmentAPI(username: string): Promise<{
 }
 
 /**
- * Perform a single check attempt via API or scrape.
- * Returns null for "status" if truly unknown after all retries.
+ * Single check attempt. Returns null status only if truly unknown after all retries.
  */
 async function checkOnce(username: string): Promise<{
   status: string;
@@ -233,9 +281,11 @@ async function checkOnce(username: string): Promise<{
 }
 
 /**
- * Check a username with automatic double-verification if first result is Unknown.
- * If the first pass returns Unknown, we wait a moment and try again once more.
- * This catches transient rate-limit / network issues without hammering Fragment.
+ * Double-verification strategy:
+ * - "Available" on first pass → verify with a second check before trusting it.
+ *   This prevents false Available due to rate-limit masking real status.
+ * - "Unknown" on first pass → retry once more.
+ * - Any definitive non-Available status → return immediately.
  */
 async function checkWithDoubleVerification(username: string): Promise<{
   status: string;
@@ -246,17 +296,40 @@ async function checkWithDoubleVerification(username: string): Promise<{
 }> {
   const first = await checkOnce(username);
 
-  // If we got a definitive answer, return it
-  if (first.status !== "Unknown") return first;
+  // Definitive non-Available result → trust immediately
+  if (first.status !== "Available" && first.status !== "Unknown") return first;
 
-  // First pass returned Unknown — wait and try once more
-  console.log(`[double-check] @${username} got Unknown on first pass, retrying…`);
-  await sleep(1500 + Math.random() * 1000);
+  // Both "Available" and "Unknown" get a second pass
+  const waitMs = first.status === "Available"
+    ? 800 + Math.random() * 600   // shorter wait for Available verification
+    : 1500 + Math.random() * 1000; // longer wait for Unknown recovery
+
+  console.log(`[double-check] @${username} got "${first.status}" on first pass, verifying…`);
+  await sleep(waitMs);
 
   const second = await checkOnce(username);
 
-  // If second pass is also Unknown, return Unknown; otherwise trust second pass
-  return second;
+  // If both passes agree → trust the result
+  if (first.status === second.status) return second;
+
+  // Disagreement: first=Available, second=something else → trust second (more conservative)
+  if (first.status === "Available" && second.status !== "Unknown") {
+    console.log(`[double-check] @${username} conflict: first=${first.status}, second=${second.status} → using second`);
+    return second;
+  }
+
+  // Disagreement: first=Unknown, second=Available → do one final tiebreaker
+  if (first.status === "Unknown" && second.status === "Available") {
+    await sleep(1000 + Math.random() * 500);
+    const third = await checkOnce(username);
+    if (third.status === "Available") return third;
+    if (third.status !== "Unknown") return third;
+    // All three inconclusive → return Unknown to be safe
+    return { ...second, status: "Unknown" };
+  }
+
+  // Default: return whichever is more informative
+  return second.status !== "Unknown" ? second : first;
 }
 
 async function checkOne(

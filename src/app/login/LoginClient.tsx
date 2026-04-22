@@ -166,7 +166,7 @@ export default function LoginClient() {
                 <div key={c} style={{ width: 7, height: 7, borderRadius: "50%", background: c, opacity: 0.7 }} />
               ))}
               <span style={{ fontSize: "10px", color: C.t3, marginLeft: "6px", letterSpacing: "0.06em", ...MONO }}>
-                auth · api key
+                Auth · API key
               </span>
             </div>
 
@@ -281,7 +281,7 @@ export default function LoginClient() {
 
             <div style={{ padding: "8px 18px 10px", borderTop: `0.5px solid ${C.line}`, background: C.bg2 }}>
               <p style={{ fontSize: "10px", color: C.t3, margin: 0, ...MONO }}>
-                Contact admin for access
+                Contact Admin for Access
               </p>
             </div>
           </div>

@@ -1,34 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { usernameChecks } from "@/db/schema";
-import { desc, eq, and, isNull } from "drizzle-orm";
+import { desc, eq, isNull } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
+function getWhere(userId: string | null) {
+  return userId ? eq(usernameChecks.userId, userId) : isNull(usernameChecks.userId);
+}
+
 export async function GET(req: NextRequest) {
   const userId = req.headers.get("x-user-id");
-
   try {
     const rows = await db
       .select()
       .from(usernameChecks)
-      .where(
-        userId
-          ? eq(usernameChecks.userId, userId)
-          : isNull(usernameChecks.userId)
-      )
+      .where(getWhere(userId))
       .orderBy(desc(usernameChecks.checkedAt))
       .limit(50);
 
-    const serialized = rows.map((row) => ({
-      ...row,
-      checkedAt:
-        row.checkedAt instanceof Date
-          ? row.checkedAt.toISOString()
-          : String(row.checkedAt),
-    }));
-
-    return NextResponse.json({ history: serialized });
+    return NextResponse.json({
+      history: rows.map(r => ({
+        ...r,
+        checkedAt: r.checkedAt instanceof Date ? r.checkedAt.toISOString() : String(r.checkedAt),
+      })),
+    });
   } catch (err) {
     console.error("History fetch error:", err);
     return NextResponse.json({ history: [] });
@@ -37,15 +33,8 @@ export async function GET(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const userId = req.headers.get("x-user-id");
-
   try {
-    await db
-      .delete(usernameChecks)
-      .where(
-        userId
-          ? eq(usernameChecks.userId, userId)
-          : isNull(usernameChecks.userId)
-      );
+    await db.delete(usernameChecks).where(getWhere(userId));
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("History clear error:", err);

@@ -223,7 +223,7 @@ export default function LoginClient() {
                   onFocus={() => setFocused(true)}
                   onBlur={() => setFocused(false)}
                   onKeyDown={e => { if (e.key === "Enter") void handleLogin(); }}
-                  placeholder="sk-••••••••••••••••••••••••••••••••"
+                  placeholder="•••••••••••••••••••••••••••••••••••"
                   autoComplete="current-password"
                   spellCheck={false}
                   style={{
@@ -281,7 +281,7 @@ export default function LoginClient() {
 
             <div style={{ padding: "8px 18px 10px", borderTop: `0.5px solid ${C.line}`, background: C.bg2 }}>
               <p style={{ fontSize: "10px", color: C.t3, margin: 0, ...MONO }}>
-                Keys are stored in Supabase · contact admin for access
+                Contact admin for access
               </p>
             </div>
           </div>

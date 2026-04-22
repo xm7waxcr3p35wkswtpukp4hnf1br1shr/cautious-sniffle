@@ -45,12 +45,12 @@ export const STATUS_CFG: Record<string, { label: string; color: string; bg: stri
   Sold:       { label: "Sold",      color: "#7a7a88", bg: "rgba(120,120,136,0.10)", border: "rgba(120,120,136,0.22)", dot: "#7a7a88" },
   Reserved:   { label: "Reserved",  color: "#6b8cff", bg: "rgba(107,140,255,0.09)", border: "rgba(107,140,255,0.24)", dot: "#6b8cff" },
   Invalid:    { label: "Invalid",   color: "#f04040", bg: "rgba(240,64,64,0.09)",   border: "rgba(240,64,64,0.26)",   dot: "#FF4900" },
-  Unknown:    { label: "Unknown",   color: "#7a7a88", bg: "rgba(120,120,136,0.10)", border: "rgba(120,120,136,0.22)", dot: "#7a7a88" },
+  Unknown:    { label: "Free",      color: "#00c8c8", bg: "rgba(0,200,200,0.09)",   border: "rgba(0,200,200,0.28)",   dot: "#00c8c8" },
 };
 
 export const STATUS_ORDER = ["Available", "For Sale", "Reserved", "Sold", "Taken", "Unknown", "Invalid"] as const;
 
-export const FREE_STATUSES = new Set(["Available"]);
+export const FREE_STATUSES = new Set(["Available", "Unknown"]);
 
 export const getS = (s: string) =>
   STATUS_CFG[s] ?? { label: s, color: "#7a7a88", bg: "rgba(120,120,136,0.10)", border: "rgba(120,120,136,0.22)", dot: "#7a7a88" };

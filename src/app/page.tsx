@@ -4,7 +4,8 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import {
   C, FONT, STATUS_ORDER, PAGE_SIZE, API_CHUNK,
   getOrCreateUserId, buildSweepCandidates, fmtDate,
-  type CheckResult, type HistoryItem, type Sort, type SweepMode, type GenSweepMode,
+  saveCheckResume, loadCheckResume, clearCheckResume,
+  type CheckResult, type HistoryItem, type Sort, type SweepMode, type GenSweepMode, type ResumeState,
 } from "@/lib/ui-constants";
 import {
   TonLogo, Spinner, PremiumStar, ExtLink, StatusPill, Avatar,
@@ -44,6 +45,11 @@ export default function HomePage() {
   const partialResultsRef = useRef<CheckResult[]>([]);
   const activeCheckMode   = useRef<"batch" | "parser" | null>(null);
 
+  // Persistence refs
+  const isRunningRef       = useRef(false);
+  const currentProgressRef = useRef<{ mode: "batch" | "parser"; remaining: string[]; partial: CheckResult[] } | null>(null);
+  const [resumeState, setResumeState] = useState<ResumeState | null>(null);
+
   const allWordsRef  = useRef<string[]>([]);
   const shownIndices = useRef<Set<number>>(new Set());
 
@@ -56,10 +62,12 @@ export default function HomePage() {
   const [parserProgress, setParserProgress]   = useState<{ done: number; total: number } | null>(null);
   const [batchProgress, setBatchProgress]     = useState<{ done: number; total: number } | null>(null);
 
-  const [wordListUrl, setWordListUrl]         = useState("");
+  const [wordListUrl, setWordListUrl]           = useState("");
   const [wordListFetching, setWordListFetching] = useState(false);
-  const [wordListError, setWordListError]     = useState<string | null>(null);
-  const [wordListInfo, setWordListInfo]       = useState<string | null>(null);
+  const [wordListError, setWordListError]       = useState<string | null>(null);
+  const [wordListInfo, setWordListInfo]         = useState<string | null>(null);
+
+  // ── Init ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     const uid = getOrCreateUserId();
@@ -67,18 +75,50 @@ export default function HomePage() {
     setUserIdDisplay(uid);
   }, []);
 
+  // Load saved resume state on mount
+  useEffect(() => {
+    const saved = loadCheckResume();
+    if (saved) setResumeState(saved);
+  }, []);
+
   // Pause on tab hide
   useEffect(() => {
     const handleVisibility = () => {
       if (document.hidden) {
-        if (loading) { pausedRef.current = true; setIsPaused(true); }
+        if (loading || parserChecking) { pausedRef.current = true; setIsPaused(true); }
       } else {
         if (pausedRef.current) { pausedRef.current = false; setIsPaused(false); }
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [loading]);
+  }, [loading, parserChecking]);
+
+  // ── Persistence: save on beforeunload (close tab / navigate away) ─────────
+
+  const saveProgress = useCallback(() => {
+    if (currentProgressRef.current?.remaining.length) {
+      saveCheckResume(currentProgressRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handler = () => { if (isRunningRef.current) saveProgress(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [saveProgress]);
+
+  // Save on component unmount (Next.js internal navigation)
+  useEffect(() => {
+    return () => {
+      if (isRunningRef.current && currentProgressRef.current?.remaining.length) {
+        saveProgress();
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Auth / helpers ────────────────────────────────────────────────────────
 
   const authHeaders = useCallback((): HeadersInit => ({
     "Content-Type": "application/json",
@@ -114,23 +154,47 @@ export default function HomePage() {
     } catch { /**/ }
   }, [clearOk, authHeaders]);
 
-  const resetState = () => {
+  // ── State management ──────────────────────────────────────────────────────
+
+  const resetState = useCallback(() => {
+    // Stop any running check FIRST so background requests are cancelled
+    stoppedRef.current = true;
+    pausedRef.current = false;
+    isRunningRef.current = false;
+    currentProgressRef.current = null;
+
     setResult(null); setBatchRes([]); setSweepRes([]);
     setParserList([]); setParserChecked([]); setError(null);
     setWordListError(null); setWordListInfo(null);
     setBatchProgress(null); setParserProgress(null);
     setIsPaused(false); setIsStopped(false);
-    pausedRef.current = false; stoppedRef.current = false;
+    setLoading(false); setParserChecking(false);
+
     pendingQueueRef.current = []; partialResultsRef.current = [];
     activeCheckMode.current = null;
-  };
+  }, []);
+
+  const handleModeChange = useCallback((key: typeof mode) => {
+    // Save progress before switching away if a check is running
+    if (isRunningRef.current && currentProgressRef.current?.remaining.length) {
+      saveProgress();
+    }
+    resetState();
+    setMode(key);
+    if (key === "history") void loadHistory();
+  }, [resetState, saveProgress, loadHistory]);
 
   const handleStop = useCallback(() => {
     stoppedRef.current = true; pausedRef.current = false;
     setIsStopped(true); setIsPaused(false);
     setLoading(false); setParserChecking(false);
+    isRunningRef.current = false;
+    // Save whatever is left so user can resume later
+    if (currentProgressRef.current?.remaining.length) saveProgress();
     setBatchProgress(null); setParserProgress(null);
-  }, []);
+  }, [saveProgress]);
+
+  // ── Core check engine ─────────────────────────────────────────────────────
 
   const waitIfPaused = useCallback((): Promise<boolean> => {
     return new Promise(resolve => {
@@ -165,6 +229,17 @@ export default function HomePage() {
         const d = await res.json() as { results?: CheckResult[]; error?: string };
         if (!res.ok) throw new Error(d.error ?? "Something went wrong");
         allResults.push(...(d.results ?? []));
+
+        // Track progress for persistence after every chunk
+        const remaining = usernames.slice(i + API_CHUNK);
+        if (activeCheckMode.current) {
+          currentProgressRef.current = {
+            mode: activeCheckMode.current,
+            remaining,
+            partial: [...allResults],
+          };
+        }
+
         onProgress(startDone + allResults.length - existingResults.length, total, [...allResults]);
       } catch (e) {
         if (stoppedRef.current) return { results: allResults, stopped: true, remaining: usernames.slice(i) };
@@ -175,6 +250,8 @@ export default function HomePage() {
     }
     return { results: allResults, stopped: false, remaining: [] };
   }, [authHeaders, waitIfPaused]);
+
+  // ── Single check ──────────────────────────────────────────────────────────
 
   const checkSingle = useCallback(async () => {
     const u = input.trim().replace(/^@/, "").toLowerCase();
@@ -188,6 +265,8 @@ export default function HomePage() {
     } catch { setError("Network error."); }
     finally { setLoading(false); }
   }, [input, loadHistory, authHeaders]);
+
+  // ── Batch check ───────────────────────────────────────────────────────────
 
   const checkBatch = useCallback(async (resumeQueue?: string[], resumePartial?: CheckResult[]) => {
     const isResume = !!resumeQueue;
@@ -203,9 +282,13 @@ export default function HomePage() {
     setLoading(true); setError(null);
     if (!isResume) { setBatchRes([]); setBatchSort("none"); }
     activeCheckMode.current = "batch";
+    isRunningRef.current = true;
 
     const alreadyDone = isResume ? (resumePartial?.length ?? 0) : 0;
     setBatchProgress({ done: alreadyDone, total: lines.length + alreadyDone });
+
+    // Init progress ref
+    currentProgressRef.current = { mode: "batch", remaining: lines, partial: resumePartial ?? [] };
 
     try {
       const { results, stopped, remaining } = await checkInChunksInterruptible(
@@ -219,11 +302,14 @@ export default function HomePage() {
         partialResultsRef.current = results;
       } else {
         pendingQueueRef.current = []; partialResultsRef.current = [];
+        currentProgressRef.current = null;
+        clearCheckResume();
         void loadHistory();
       }
     } catch (e) { setError(e instanceof Error ? e.message : "Network error."); }
     finally {
       setLoading(false);
+      isRunningRef.current = false;
       if (!stoppedRef.current) setBatchProgress(null);
     }
   }, [batchInput, loadHistory, checkInChunksInterruptible]);
@@ -233,6 +319,8 @@ export default function HomePage() {
     stoppedRef.current = false; setIsStopped(false);
     void checkBatch(pendingQueueRef.current, partialResultsRef.current);
   }, [checkBatch]);
+
+  // ── Sweep check ───────────────────────────────────────────────────────────
 
   const checkSweep = useCallback(async () => {
     const base = sweepInput.trim().replace(/^@/, "").toLowerCase();
@@ -249,6 +337,8 @@ export default function HomePage() {
     } catch { setError("Network error."); }
     finally { setLoading(false); }
   }, [sweepInput, sweepMode, loadHistory, authHeaders]);
+
+  // ── Parser word list ──────────────────────────────────────────────────────
 
   const handleFetchWordList = useCallback(async () => {
     if (!wordListUrl.trim()) return;
@@ -274,7 +364,6 @@ export default function HomePage() {
     const available = Array.from({ length: all.length }, (_, i) => i).filter(i => !shownIndices.current.has(i));
     if (!available.length) { setWordListError(`All ${all.length} words have been shown.`); return; }
 
-    // Fisher-Yates shuffle slice
     for (let i = available.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [available[i], available[j]] = [available[j], available[i]];
@@ -287,6 +376,8 @@ export default function HomePage() {
     pendingQueueRef.current = []; partialResultsRef.current = [];
   }, []);
 
+  // ── Parser check ──────────────────────────────────────────────────────────
+
   const handleCheckParsed = useCallback(async (resumeQueue?: string[], resumePartial?: CheckResult[]) => {
     const isResume = !!resumeQueue;
     if (!isResume && !parserList.length) return;
@@ -296,6 +387,7 @@ export default function HomePage() {
     setParserChecking(true);
     if (!isResume) { setParserChecked([]); setParserSort("none"); setParserProgress(null); }
     activeCheckMode.current = "parser";
+    isRunningRef.current = true;
 
     const baseUsernames = isResume
       ? resumeQueue!
@@ -305,6 +397,9 @@ export default function HomePage() {
 
     const alreadyDone = isResume ? (resumePartial?.length ?? 0) : 0;
     setParserProgress({ done: alreadyDone, total: baseUsernames.length + alreadyDone });
+
+    // Init progress ref
+    currentProgressRef.current = { mode: "parser", remaining: baseUsernames, partial: resumePartial ?? [] };
 
     try {
       const { results, stopped, remaining } = await checkInChunksInterruptible(
@@ -318,11 +413,14 @@ export default function HomePage() {
         partialResultsRef.current = results;
       } else {
         pendingQueueRef.current = []; partialResultsRef.current = [];
+        currentProgressRef.current = null;
+        clearCheckResume();
         void loadHistory();
       }
     } catch (e) { console.error("Parser check error:", e); }
     finally {
       setParserChecking(false);
+      isRunningRef.current = false;
       if (!stoppedRef.current) setParserProgress(null);
     }
   }, [parserList, parserSweepMode, loadHistory, checkInChunksInterruptible]);
@@ -333,11 +431,39 @@ export default function HomePage() {
     void handleCheckParsed(pendingQueueRef.current, partialResultsRef.current);
   }, [handleCheckParsed]);
 
+  // ── Resume saved check ────────────────────────────────────────────────────
+
+  const handleResumeFromSave = useCallback(() => {
+    if (!resumeState) return;
+    clearCheckResume();
+    const state = resumeState;
+    setResumeState(null);
+    if (state.mode === "batch") {
+      setMode("batch");
+      // Restore partial results to UI immediately
+      setBatchRes(state.partial);
+      void checkBatch(state.remaining, state.partial);
+    } else {
+      setMode("parser");
+      setParserChecked(state.partial);
+      void handleCheckParsed(state.remaining, state.partial);
+    }
+  }, [resumeState, checkBatch, handleCheckParsed]);
+
+  const handleDismissResume = useCallback(() => {
+    clearCheckResume();
+    setResumeState(null);
+  }, []);
+
+  // ── Parser copy ───────────────────────────────────────────────────────────
+
   const handleCopyParsed = useCallback(() => {
     navigator.clipboard.writeText(parserList.join("\n")).then(() => {
       setParserCopied(true); setTimeout(() => setParserCopied(false), 1500);
     });
   }, [parserList]);
+
+  // ── Derived values ────────────────────────────────────────────────────────
 
   const TABS = [
     { key: "single" as const, label: "Single" }, { key: "batch" as const, label: "Batch" },
@@ -421,12 +547,62 @@ export default function HomePage() {
             </p>
           </div>
 
+          {/* Resume banner */}
+          {resumeState && (
+            <div style={{
+              marginBottom: "16px", padding: "12px 14px",
+              background: "rgba(0,152,234,0.07)", border: "0.5px solid rgba(0,152,234,0.3)",
+              borderRadius: "2px", display: "flex", alignItems: "center",
+              justifyContent: "space-between", gap: "12px", flexWrap: "wrap",
+              animation: "fadeUp 0.2s ease forwards",
+            }}>
+              <div>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: C.t0, marginBottom: "2px", ...FONT }}>
+                  Unfinished check found
+                </div>
+                <div style={{ fontSize: "11px", color: C.t2, ...FONT }}>
+                  {resumeState.mode === "batch" ? "Batch" : "Parser"} check ·{" "}
+                  <span style={{ color: C.ton, fontWeight: 700 }}>{resumeState.remaining.length}</span> usernames remaining ·{" "}
+                  <span style={{ color: C.t3 }}>{resumeState.partial.length} already checked</span>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                <button
+                  onClick={handleResumeFromSave}
+                  style={{
+                    padding: "5px 14px", background: C.ton,
+                    border: "none", borderRadius: "2px", color: "#fff",
+                    fontSize: "11px", fontWeight: 700, cursor: "pointer",
+                    letterSpacing: "0.04em", transition: "opacity 100ms ease", ...FONT,
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.85"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
+                >
+                  Resume
+                </button>
+                <button
+                  onClick={handleDismissResume}
+                  style={{
+                    padding: "5px 10px", background: "transparent",
+                    border: `0.5px solid ${C.line}`, borderRadius: "2px",
+                    color: C.t2, fontSize: "11px", cursor: "pointer",
+                    transition: "all 100ms ease", ...FONT,
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.t0; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.t2; }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Tabs */}
           <div style={{ display: "flex", borderBottom: `0.5px solid ${C.line}`, marginBottom: "24px", overflowX: "auto" }}>
             {TABS.map(({ key, label }) => {
               const active = mode === key;
               return (
-                <button key={key} onClick={() => { setMode(key); resetState(); if (key === "history") void loadHistory(); }} style={{
+                <button key={key} onClick={() => handleModeChange(key)} style={{
                   padding: "7px 14px", border: "none", borderBottom: `1.5px solid ${active ? C.t0 : "transparent"}`,
                   background: "transparent", color: active ? C.t0 : C.t2,
                   fontWeight: active ? 700 : 400, fontSize: "12px", letterSpacing: "0.04em",
@@ -783,7 +959,6 @@ export default function HomePage() {
           </div>
         </footer>
       </div>
-      
     </>
   );
 }

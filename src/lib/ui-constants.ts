@@ -39,7 +39,7 @@ export const FONT: React.CSSProperties = { fontFamily: "var(--font-mono)" };
 // ── Status config ──────────────────────────────────────────────────────────
 
 export const STATUS_CFG: Record<string, { label: string; color: string; bg: string; border: string; dot: string }> = {
-  Available:  { label: "Available", color: "#35c96b", bg: "rgba(53,201,107,0.10)",  border: "rgba(53,201,107,0.28)",  dot: "#35c96b" },
+  Available:  { label: "Free",      color: "#35c96b", bg: "rgba(53,201,107,0.10)",  border: "rgba(53,201,107,0.28)",  dot: "#35c96b" },
   Taken:      { label: "Taken",     color: "#f04040", bg: "rgba(240,64,64,0.09)",   border: "rgba(240,64,64,0.26)",   dot: "#FF4900" },
   "For Sale": { label: "For Sale",  color: "#c07aff", bg: "rgba(165,61,231,0.10)",  border: "rgba(165,61,231,0.28)",  dot: "#c07aff" },
   Sold:       { label: "Sold",      color: "#7a7a88", bg: "rgba(120,120,136,0.10)", border: "rgba(120,120,136,0.22)", dot: "#7a7a88" },
@@ -50,6 +50,7 @@ export const STATUS_CFG: Record<string, { label: string; color: string; bg: stri
 
 export const STATUS_ORDER = ["Available", "For Sale", "Reserved", "Sold", "Taken", "Unknown", "Invalid"] as const;
 
+// Both Available and Unknown are considered free / exportable
 export const FREE_STATUSES = new Set(["Available", "Unknown"]);
 
 export const getS = (s: string) =>
@@ -63,6 +64,37 @@ export const SUFFIX_HOT = new Set(["s", "x", "z", "y", "0", "1", "2", "3"]);
 export const PREFIX_HOT = new Set(["i", "e", "o", "a", "m", "t"]);
 export const PAGE_SIZE = 100;
 export const API_CHUNK = 100;
+
+// ── Persistence helpers ────────────────────────────────────────────────────
+
+export type ResumeState = {
+  mode: "batch" | "parser";
+  remaining: string[];
+  partial: CheckResult[];
+  savedAt: number;
+};
+
+export function saveCheckResume(state: Omit<ResumeState, "savedAt">): void {
+  try {
+    if (!state.remaining.length) return;
+    localStorage.setItem("resume_check", JSON.stringify({ ...state, savedAt: Date.now() }));
+  } catch { /* ignore */ }
+}
+
+export function loadCheckResume(): ResumeState | null {
+  try {
+    const raw = localStorage.getItem("resume_check");
+    if (!raw) return null;
+    const state = JSON.parse(raw) as ResumeState;
+    if (!state?.remaining?.length) { localStorage.removeItem("resume_check"); return null; }
+    if (Date.now() - state.savedAt > 3_600_000) { localStorage.removeItem("resume_check"); return null; }
+    return state;
+  } catch { return null; }
+}
+
+export function clearCheckResume(): void {
+  try { localStorage.removeItem("resume_check"); } catch { /* ignore */ }
+}
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -88,7 +120,7 @@ export function fmtDate(s: string): string {
   } catch { return s; }
 }
 
-export function downloadAvailable(results: CheckResult[], filename = "available_usernames.txt"): boolean {
+export function downloadAvailable(results: CheckResult[], filename = "free_usernames.txt"): boolean {
   const lines = results.filter(r => FREE_STATUSES.has(r.status)).map(r => r.username);
   if (!lines.length) return false;
   const a = Object.assign(document.createElement("a"), {

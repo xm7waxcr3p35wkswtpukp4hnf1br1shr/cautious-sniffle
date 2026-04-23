@@ -141,7 +141,6 @@ export default function AdminPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createOk, setCreateOk] = useState(false);
 
-  // Fetch online presence
   const loadPresence = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/presence");
@@ -175,7 +174,7 @@ export default function AdminPage() {
     return () => clearInterval(interval);
   }, [loadPresence]);
 
-  // Heartbeat — отправляем присутствие пока админ на этой странице
+  // Heartbeat — admin is online while on this page
   useEffect(() => {
     const ping = () => { void fetch("/api/admin/presence", { method: "POST" }); };
     ping();
@@ -366,7 +365,6 @@ export default function AdminPage() {
               </div>
             ) : (
               <div style={{ border: `0.5px solid ${C.line}`, borderRadius: "4px", overflow: "hidden", background: C.bg1, animation: "fadeUp 0.15s ease forwards" }}>
-                {/* Table header */}
                 <div style={{
                   display: "grid", gridTemplateColumns: "1fr 70px 80px 80px 130px",
                   padding: "7px 14px", background: C.bg2, borderBottom: `0.5px solid ${C.line}`,

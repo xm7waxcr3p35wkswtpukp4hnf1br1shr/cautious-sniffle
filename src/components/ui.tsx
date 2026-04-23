@@ -232,7 +232,7 @@ export function SortBar({ sort, setSort, results }: { sort: Sort; setSort: (s: S
     { k: "none", label: "Default" }, { k: "az", label: "A → Z" },
     { k: "za", label: "Z → A" }, { k: "group", label: "Group" },
   ];
-  const availableCount = results.filter(r => FREE_STATUSES.has(r.status)).length;
+  const freeCount = results.filter(r => FREE_STATUSES.has(r.status)).length;
   return (
     <div style={{ display: "flex", gap: "2px", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap" }}>
       <div style={{ display: "flex", gap: "2px", alignItems: "center" }}>
@@ -248,13 +248,13 @@ export function SortBar({ sort, setSort, results }: { sort: Sort; setSort: (s: S
           }}>{label}</button>
         ))}
       </div>
-      {availableCount > 0 && (
+      {freeCount > 0 && (
         <button
           onClick={() => {
             const lines = results.filter(r => FREE_STATUSES.has(r.status)).map(r => r.username);
             const a = Object.assign(document.createElement("a"), {
               href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/plain" })),
-              download: "available_usernames.txt",
+              download: "free_usernames.txt",
             });
             a.click(); URL.revokeObjectURL(a.href);
           }}
@@ -270,7 +270,7 @@ export function SortBar({ sort, setSort, results }: { sort: Sort; setSort: (s: S
           <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
             <path d="M6 1v7M3 5l3 3 3-3M1 10h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          {availableCount} available
+          {freeCount} free
         </button>
       )}
     </div>
@@ -362,7 +362,7 @@ export function SweepVariantGrid({ base, mode, results }: { base: string; mode: 
               {isHot && <span style={{ position: "absolute", top: "2px", right: "3px", width: "4px", height: "4px", borderRadius: "50%", background: C.ton, opacity: 0.8 }} />}
               <span style={{ fontSize: "12px", fontWeight: 700, color: cfg ? cfg.color : C.t2, ...FONT }}>{c}</span>
               <span style={{ fontSize: "9px", color: cfg ? cfg.color : C.t3, opacity: 0.8, marginTop: "1px", ...FONT }}>
-                {r ? r.status.slice(0, 4) : "···"}
+                {r ? (FREE_STATUSES.has(r.status) ? "free" : r.status.slice(0, 4)) : "···"}
               </span>
             </a>
           );
